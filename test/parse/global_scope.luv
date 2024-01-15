@@ -1,0 +1,5 @@
+int stuff
+---
+TopLevel(body=Block(entries=[VarDecl(type=Type(name='int'),
+                                     name='stuff',
+                                     init=None)]))

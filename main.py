@@ -1,3 +1,4 @@
+import glob
 import importlib
 import sys
 
@@ -100,6 +101,13 @@ funcy(x)
 _PREPROC_GLOBALS = {}
 _PREPROC_LOCALS = {}
 _MACROS = {}
+_KEYWORDS = {
+  'auto': last.Type('auto'),
+  'bool': last.Type('bool'),
+  'int': last.Type('int'),
+  'void': last.Type('void'),
+}
+
 
 def load_builtin_macros():
   for x in ["print"]:
@@ -123,19 +131,19 @@ class CompilerContext:
       #if isinstance(s, last.Return):
         #pass
       pass
-    return KEYWORDS['void']
+    return _KEYWORDS['void']
 
   def definition(self, d):
     if isinstance(d, last.FuncDef):
       # TODO: need stack of in-scope vars with types (upvals, globals, etc too)
       return_type = self.return_type_of_block(d.body)
-      if d.type != KEYWORDS['auto']:
+      if d.type != _KEYWORDS['auto']:
         if d.type != return_type:
           raise TypeError('%s specified as returning "%s" but returns "%s"' % (
             d.name, self.type_(d.type), self.type_(return_type)))
       params = ','.join(self.param(p) for p in d.params)
       if not params:
-        params = self.type_(KEYWORDS['void'])
+        params = self.type_(_KEYWORDS['void'])
       res = 'static %s %s(%s) {' % (self.type_(return_type), d.name, params)
       res += self.block(d.body)
       return res + '}'
@@ -183,7 +191,7 @@ class CompilerContext:
 
   def get_type(self, expr):
     if isinstance(expr, last.Number):
-      return KEYWORDS['int']
+      return _KEYWORDS['int']
     else:
       assert False, "unhandled get_type %s" % expr
 
@@ -232,12 +240,6 @@ class CompilerContext:
     res += '}'
     return res
 
-KEYWORDS = {
-  'auto': last.Type('auto'),
-  'int': last.Type('int'),
-  'void': last.Type('void'),
-}
-
 class ToAst(Transformer):
   def DEC_NUMBER(self, n):
     #print('DEC_NUMBER', n, file=sys.stderr)
@@ -257,8 +259,7 @@ class ToAst(Transformer):
     return last.Number(children[0])
 
   def ident(self, children):
-    print("IDENT", children[0])
-    x = KEYWORDS.get(children[0], None)
+    x = _KEYWORDS.get(children[0], None)
     if x:
       return x
     return last.Ident(children[0])
@@ -297,7 +298,7 @@ class ToAst(Transformer):
 
   def funcdef(self, children):
     x = children[0]
-    type = children.pop(0) if isinstance(x, last.Type) else KEYWORDS['auto']
+    type = children.pop(0) if isinstance(x, last.Type) else _KEYWORDS['auto']
     name = children.pop(0)
     x = children[0]
     params = children.pop(0) if isinstance(x, list) else []
@@ -332,30 +333,53 @@ class ToAst(Transformer):
   def start(self, children):
     return last.TopLevel(last.Block(children))
 
+def parse_tests(parser):
+  import pprint
+  for pt in glob.glob('test/parse/*.luv'):
+    pt = pt.replace('\\', '/')
+    with open(pt, 'r') as f:
+      source, _, expected = f.read().partition('---\n')
+    expected = expected.rstrip('\n')
+    tree = parser.parse(source)
+    ast = ToAst(visit_tokens=True).transform(tree)
+    got = pprint.pformat(ast)
+    if expected != got:
+      print(pt)
+      print('--- EXPECTED')
+      print("%s" % expected)
+      print('--- GOT')
+      print("%s" % got)
+      raise SystemExit(1)
+    else:
+      print('OK: %s' % pt)
+
 def main():
   parser = Lark_StandAlone(postlex=PythonIndenter())
 
   load_builtin_macros()
   #print(_MACROS)
 
-  tree = parser.parse(_TEST_CODE)
-  print(tree.pretty(), file=sys.stderr)
+  if len(sys.argv) == 2 and sys.argv[1] == 'test':
+    parse_tests(parser)
+  else:
+    tree = parser.parse(_TEST_CODE)
+    print(tree.pretty(), file=sys.stderr)
 
-  ast = ToAst(visit_tokens=True).transform(tree)
-  import pprint
-  pprint.pprint(ast, stream=sys.stderr)
+    ast = ToAst(visit_tokens=True).transform(tree)
+    import pprint
+    pprint.pprint(ast, stream=sys.stderr)
 
-  cctx = CompilerContext()
-  print(cctx.codegen(ast))
+    cctx = CompilerContext()
+    print(cctx.codegen(ast))
 
-  '''
-  class MacroContext:
-    def __init__(self):
-      self.arguments = ['a', 'b', 'c']
-  ctx = MacroContext()
-  for x in Macro_printx(ctx):
-    print('yielded', x)
-  '''
+    '''
+    class MacroContext:
+      def __init__(self):
+        self.arguments = ['a', 'b', 'c']
+    ctx = MacroContext()
+    for x in Macro_printx(ctx):
+      print('yielded', x)
+    '''
 
 if __name__ == '__main__':
   main()
