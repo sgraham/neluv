@@ -1,0 +1,109 @@
+struct Person:
+  str name
+  int age
+
+Person a = {name="John", age=20}
+print(a.name, a.age)
+
+b = (Person){name="Paul", age=21}
+print(b.name, b.age)
+
+c = (Person){"George", 22}
+print(c.name, c.age)
+
+Person d
+d.name = "Ringo"
+d.age = 23
+print(d.name, d.age)
+
+
+// ---
+
+union IntOrFloat:
+  i64 i
+  f64 f
+
+IntOrFloat u = {i=1}
+print(u.i)  //> 1
+u.f = 1
+print(u.f)  //> 1.0
+print(u.i)  //> <junk>
+
+
+// ---
+
+def int add(int a, int b):
+  return a + b
+
+print(add(1, 2))
+
+
+// --
+
+// nested but not closing maybe?
+def f():
+  def g():
+    return "hello from g"
+  return g()
+
+print(f())  //> hello from g
+
+// --
+
+counter = 1
+def increment():
+  counter += 1
+print(counter)
+increment()
+print(counter)
+
+
+// ---
+// specialization varargs
+// not sure about this
+def f(...):
+  print(...)
+f(1, true)
+
+def sum(...):
+  int s
+  // for i in ...:
+  //  s += #[select(i, ...)#
+  return s
+
+print(sum(1, 2, 3))  //> 6
+
+// --
+// polymorphic functions
+
+def add(a, b):
+  return a + b
+a = add(1, 2)
+print(a)  //> 3
+
+b = add(1.0, 2.0)
+print(b)  //> 3.0
+
+
+preproc:  // Python blocks that act on current AST
+  def increment(a, amount):
+    node = luvast.Assign(luvast.Id(a),
+                         luvast.Add(luvast.Id(a), amount))
+    inject_statement(node)
+
+x = 0
+
+preproc:
+  increment(x, 4)
+
+// int x = 0
+// x = x + 4
+// print(x)
+
+print(x)  //> 4
+
+
+#["x"] = #{math.pi}
+// x = 3.141592653589793
+// print(x)
+print(x)  //> 3.14159265

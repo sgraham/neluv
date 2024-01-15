@@ -1,0 +1,4 @@
+Parser/
+compiler/
+venv/
+__pycache__
