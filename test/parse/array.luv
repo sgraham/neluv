@@ -1,0 +1,18 @@
+int just_int
+[]int unsized_arr
+[256]int fixed_size
+[]*int array_of_ptrs_to_ints
+---
+TopLevel(body=Block(entries=[VarDecl(type=Type(name='int'),
+                                     name='just_int',
+                                     init=None),
+                             VarDecl(type=SliceDecl(type=Type(name='int')),
+                                     name='unsized_arr',
+                                     init=None),
+                             VarDecl(type=FixedArrayDecl(size=Number(value=256),
+                                                         type=Type(name='int')),
+                                     name='fixed_size',
+                                     init=None),
+                             VarDecl(type=SliceDecl(type=PointerDecl(type=Type(name='int'))),
+                                     name='array_of_ptrs_to_ints',
+                                     init=None)]))

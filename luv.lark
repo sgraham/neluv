@@ -81,8 +81,12 @@ macro_with_block_stmt: test_or_star_expr ":" suite
 // int a = 5
 ?var_decl_init: typed_uninit_var_decl
               | typed_or_init_var_decl
-typed_uninit_var_decl : dotted_name name
-typed_or_init_var_decl: [dotted_name] name "=" test_or_star_expr
+?var_decl_type : dotted_name
+              | "[" "]" var_decl_type -> slice
+              | "[" number "]" var_decl_type -> fixed_array
+              | "*" var_decl_type -> pointer
+typed_uninit_var_decl : var_decl_type name
+typed_or_init_var_decl: [var_decl_type] name "=" test_or_star_expr
 
 suite: simple_stmt | _NEWLINE _INDENT stmt+ _DEDENT
 

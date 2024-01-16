@@ -58,6 +58,19 @@ class FieldReference:
   lhs: object
   rhs: str
 
+@dataclass
+class SliceDecl:
+  type: object
+
+@dataclass
+class FixedArrayDecl:
+  size: object
+  type: object
+
+@dataclass
+class PointerDecl:
+  type: object
+
 #import inspect
 #inspect.currentframe().f_back.f_locals
 def parse(code):

@@ -274,6 +274,15 @@ class ToAst(Transformer):
       cur = last.FieldReference(children[i], cur)
     return cur
 
+  def slice(self, children):
+    return last.SliceDecl(children[0])
+
+  def fixed_array(self, children):
+    return last.FixedArrayDecl(children[0], children[1])
+
+  def pointer(self, children):
+    return last.PointerDecl(children[0])
+
   def typed_uninit_var_decl(self, children):
     return last.VarDecl(children[0], children[1], None)
 
@@ -335,7 +344,7 @@ class ToAst(Transformer):
 
 def parse_tests(parser):
   import pprint
-  for pt in glob.glob('test/parse/*.luv'):
+  for pt in sorted(glob.glob('test/parse/*.luv')):
     pt = pt.replace('\\', '/')
     with open(pt, 'r') as f:
       source, _, expected = f.read().partition('---\n')
