@@ -1,5 +1,5 @@
 int x = 123
 ---
-TopLevel(body=Block(entries=[VarDecl(type=Type(name='int'),
+TopLevel(body=Block(entries=[VarDecl(type=Type(base='i32'),
                                      name='x',
                                      init=Number(value=123))]))

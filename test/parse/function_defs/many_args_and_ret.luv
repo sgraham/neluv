@@ -1,0 +1,22 @@
+def float stuff(u8 a, u16 b, u32 c, u64 d, i8 e, i16 f, i32 g, i64 h):
+  pass
+---
+TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='f32'),
+                                     name='stuff',
+                                     params=[TypedParam(type=Type(base='u8'),
+                                                        name='a'),
+                                             TypedParam(type=Type(base='u16'),
+                                                        name='b'),
+                                             TypedParam(type=Type(base='u32'),
+                                                        name='c'),
+                                             TypedParam(type=Type(base='u64'),
+                                                        name='d'),
+                                             TypedParam(type=Type(base='i8'),
+                                                        name='e'),
+                                             TypedParam(type=Type(base='i16'),
+                                                        name='f'),
+                                             TypedParam(type=Type(base='i32'),
+                                                        name='g'),
+                                             TypedParam(type=Type(base='i64'),
+                                                        name='h')],
+                                     body=Block(entries=[Pass()]))]))

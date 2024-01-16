@@ -1,5 +1,5 @@
 bool x
 ---
-TopLevel(body=Block(entries=[VarDecl(type=Type(name='bool'),
+TopLevel(body=Block(entries=[VarDecl(type=Type(base='bool'),
                                      name='x',
                                      init=None)]))

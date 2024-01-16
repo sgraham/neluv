@@ -1,0 +1,10 @@
+def func(bool x, int y):
+  pass
+---
+TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
+                                     name='func',
+                                     params=[TypedParam(type=Type(base='bool'),
+                                                        name='x'),
+                                             TypedParam(type=Type(base='i32'),
+                                                        name='y')],
+                                     body=Block(entries=[Pass()]))]))

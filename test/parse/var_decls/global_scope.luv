@@ -1,5 +1,5 @@
 int stuff
 ---
-TopLevel(body=Block(entries=[VarDecl(type=Type(name='int'),
+TopLevel(body=Block(entries=[VarDecl(type=Type(base='i32'),
                                      name='stuff',
                                      init=None)]))

@@ -104,7 +104,21 @@ _MACROS = {}
 _KEYWORDS = {
   'auto': last.Type('auto'),
   'bool': last.Type('bool'),
-  'int': last.Type('int'),
+  'byte': last.Type('u8'),
+  'double': last.Type('f64'),
+  'f16': last.Type('f16'),
+  'f32': last.Type('f32'),
+  'f64': last.Type('f64'),
+  'float': last.Type('f32'),
+  'i16': last.Type('i16'),
+  'i32': last.Type('i32'),
+  'i64': last.Type('i64'),
+  'i8': last.Type('i8'),
+  'int': last.Type('i32'),
+  'u16': last.Type('u16'),
+  'u32': last.Type('u32'),
+  'u64': last.Type('u64'),
+  'u8': last.Type('u8'),
   'void': last.Type('void'),
 }
 
@@ -249,6 +263,9 @@ class ToAst(Transformer):
     #print('NAME', n, file=sys.stderr)
     return str(n)
 
+  def STRING(self, v):
+    return v[1:-1]
+
   def funccall(self, children):
     return last.FuncCall(children[0], children[1] if len(children) > 1 else [])
 
@@ -257,6 +274,9 @@ class ToAst(Transformer):
 
   def number(self, children):
     return last.Number(children[0])
+
+  def string(self, children):
+    return last.String(children[0])
 
   def ident(self, children):
     x = _KEYWORDS.get(children[0], None)
@@ -278,7 +298,7 @@ class ToAst(Transformer):
     return last.SliceDecl(children[0])
 
   def fixed_array(self, children):
-    return last.FixedArrayDecl(children[0], children[1])
+    return last.FixedArrayDecl(size=children[0], base=children[1])
 
   def pointer(self, children):
     return last.PointerDecl(children[0])
@@ -295,8 +315,14 @@ class ToAst(Transformer):
   def macro_with_block_stmt(self, children):
     return last.MacroCallWithBlock(children[0], children[1])
 
+  def return_stmt(self, children):
+    return last.Return(children[0])
+
+  def pass_stmt(self, children):
+    return last.Pass()
+
   def returntype(self, children):
-    assert isinstance(children[0], last.Type)
+    #assert isinstance(children[0], last.Type)
     return children[0]
 
   def name(self, children):
@@ -344,7 +370,7 @@ class ToAst(Transformer):
 
 def parse_tests(parser):
   import pprint
-  for pt in sorted(glob.glob('test/parse/*.luv')):
+  for pt in sorted(glob.glob('test/parse/**/*.luv', recursive=True)):
     pt = pt.replace('\\', '/')
     with open(pt, 'r') as f:
       source, _, expected = f.read().partition('---\n')

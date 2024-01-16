@@ -5,6 +5,10 @@ class Number:
   value: int
 
 @dataclass
+class String:
+  value: str
+
+@dataclass
 class FuncCall:
   func: object
   args: list[object]
@@ -28,14 +32,26 @@ class TopLevel:
 
 @dataclass
 class FuncDef:
-  type: object
+  rtype: object
   name: str
   params: list[object]
   body: Block
 
 @dataclass
 class Type:
-  name: str
+  base: object
+
+@dataclass
+class SliceDecl(Type):
+  pass
+
+@dataclass
+class FixedArrayDecl(Type):
+  size: object
+
+@dataclass
+class PointerDecl(Type):
+  pass
 
 @dataclass
 class TypedParam:
@@ -48,6 +64,14 @@ class MacroCallWithBlock:
   body: Block
 
 @dataclass
+class Return:
+  value: object
+
+@dataclass
+class Pass:
+  pass
+
+@dataclass
 class VarDecl:
   type: object
   name: str
@@ -57,19 +81,6 @@ class VarDecl:
 class FieldReference:
   lhs: object
   rhs: str
-
-@dataclass
-class SliceDecl:
-  type: object
-
-@dataclass
-class FixedArrayDecl:
-  size: object
-  type: object
-
-@dataclass
-class PointerDecl:
-  type: object
 
 #import inspect
 #inspect.currentframe().f_back.f_locals

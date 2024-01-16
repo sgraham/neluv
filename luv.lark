@@ -90,7 +90,7 @@ typed_or_init_var_decl: [var_decl_type] name "=" test_or_star_expr
 
 suite: simple_stmt | _NEWLINE _INDENT stmt+ _DEDENT
 
-returntype: test
+returntype: var_decl_type
 
 ?test: or_test ("if" or_test "else" test)?
      | lambdef
