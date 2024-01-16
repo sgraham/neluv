@@ -1,0 +1,4 @@
+def func(,):
+  pass
+---
+ParseError(line=1, column=10, got=Token('COMMA', ','))

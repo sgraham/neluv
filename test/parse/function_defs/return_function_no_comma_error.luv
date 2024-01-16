@@ -1,0 +1,6 @@
+// This might be a common error, the "x" shouldn't be there because it's types
+// only.
+def def bool(int x) Func(bool x):
+  return null
+---
+ParseError(line=3, column=18, got=Token('NAME', 'x'))

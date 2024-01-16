@@ -9,6 +9,10 @@ class String:
   value: str
 
 @dataclass
+class Const:
+  name: str
+
+@dataclass
 class FuncCall:
   func: object
   args: list[object]
@@ -40,6 +44,11 @@ class FuncDef:
 @dataclass
 class Type:
   base: object
+
+@dataclass
+class FuncType(Type):
+  rtype: object
+  params: list[object]
 
 @dataclass
 class SliceDecl(Type):
@@ -82,9 +91,8 @@ class FieldReference:
   lhs: object
   rhs: str
 
-#import inspect
-#inspect.currentframe().f_back.f_locals
-def parse(code):
-  """Turns a string into an AST."""
-  print('CODE', code)
-  print(inspect.currentframe().f_back.f_locals)
+@dataclass
+class ParseError:
+  line: int
+  column: int
+  got: object

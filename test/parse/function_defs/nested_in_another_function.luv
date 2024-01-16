@@ -1,0 +1,14 @@
+def int stuff():
+  def int things():
+    return 4
+  return things()
+---
+TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='i32'),
+                                     name='stuff',
+                                     params=[],
+                                     body=Block(entries=[FuncDef(rtype=Type(base='i32'),
+                                                                 name='things',
+                                                                 params=[],
+                                                                 body=Block(entries=[Return(value=Number(value=4))])),
+                                                         Return(value=FuncCall(func=Ident(name='things'),
+                                                                               args=[]))]))]))

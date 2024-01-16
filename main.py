@@ -2,7 +2,7 @@ import glob
 import importlib
 import sys
 
-from luv_lark import Lark_StandAlone, PythonIndenter, Tree, Transformer, v_args
+from luv_lark import Lark_StandAlone, PythonIndenter, Tree, Transformer, v_args, UnexpectedToken
 import last
 
 this_module = sys.modules[__name__]
@@ -120,6 +120,10 @@ _KEYWORDS = {
   'u64': last.Type('u64'),
   'u8': last.Type('u8'),
   'void': last.Type('void'),
+
+  'false': last.Const('false'),
+  'null': last.Const('null'),
+  'true': last.Const('true'),
 }
 
 
@@ -284,6 +288,9 @@ class ToAst(Transformer):
       return x
     return last.Ident(children[0])
 
+  def const_null(self, children):
+    return _KEYWORDS['null']
+
   def dotted_name(self, children):
     # ident rather than Ident to get keyword if actually undotted.
     # This handles `int x`, but not `A.int x` which I think is what I want.
@@ -340,6 +347,16 @@ class ToAst(Transformer):
     body = children.pop(0)
     return last.FuncDef(type, name, params, body)
 
+  def funcdecl(self, children):
+    x = children[0]
+    type = children.pop(0) if isinstance(x, last.Type) else _KEYWORDS['auto']
+    x = children[0]
+    params = children.pop(0) if isinstance(x, list) else []
+    return last.FuncType(base=None, rtype=type, params=params)
+
+  def parameter_types(self, children):
+    return children
+
   def typedparam(self, children):
     return last.TypedParam(children[0], children[1])
 
@@ -348,6 +365,10 @@ class ToAst(Transformer):
 
   def suite(self, children):
     return last.Block(children)
+
+  def error(self, children):
+    return children[0]
+    
 
   '''
   def preproc_stmt(self, children):
@@ -368,6 +389,18 @@ class ToAst(Transformer):
   def start(self, children):
     return last.TopLevel(last.Block(children))
 
+class Parser:
+  def __init__(self):
+    self.parser = Lark_StandAlone(postlex=PythonIndenter())
+
+  def parse(self, code):
+    try:
+      return self.parser.parse(code)
+    except UnexpectedToken as err:
+      return Tree(
+          'error',
+          children=[last.ParseError(err.line, err.column, err.token)])
+
 def parse_tests(parser):
   import pprint
   for pt in sorted(glob.glob('test/parse/**/*.luv', recursive=True)):
@@ -376,6 +409,7 @@ def parse_tests(parser):
       source, _, expected = f.read().partition('---\n')
     expected = expected.rstrip('\n')
     tree = parser.parse(source)
+    #print(tree.pretty())
     ast = ToAst(visit_tokens=True).transform(tree)
     got = pprint.pformat(ast)
     if expected != got:
@@ -389,7 +423,7 @@ def parse_tests(parser):
       print('OK: %s' % pt)
 
 def main():
-  parser = Lark_StandAlone(postlex=PythonIndenter())
+  parser = Parser()
 
   load_builtin_macros()
   #print(_MACROS)

@@ -35,6 +35,7 @@ syn keyword     luvType bool byte rune int float
 syn keyword     luvType u8 u16 u32 u64 i8 i16 i32 i64
 syn keyword     luvType f16 f32 f64
 syn keyword     luvType str
+syn keyword     luvType void
 hi def link     luvType Type
 
 syn region	luvPreProc	start="^\s*\zs\%(%:\|#\)" skip="\\$" end="$" keepend contains=ALLBUT,@Spell

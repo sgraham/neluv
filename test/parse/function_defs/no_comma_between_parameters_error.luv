@@ -1,0 +1,4 @@
+def func(int x int y):
+  pass
+---
+ParseError(line=1, column=16, got=Token('NAME', 'int'))

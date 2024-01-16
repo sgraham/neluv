@@ -85,8 +85,15 @@ macro_with_block_stmt: test_or_star_expr ":" suite
               | "[" "]" var_decl_type -> slice
               | "[" number "]" var_decl_type -> fixed_array
               | "*" var_decl_type -> pointer
+              | funcdecl
+
+// Similar to funcdef, but return must be manual, and parameters can't have names
+funcdecl: "def" returntype "(" [parameter_types] ")"
+parameter_types: test ("," test)*
+
 typed_uninit_var_decl : var_decl_type name
 typed_or_init_var_decl: [var_decl_type] name "=" test_or_star_expr
+
 
 suite: simple_stmt | _NEWLINE _INDENT stmt+ _DEDENT
 
