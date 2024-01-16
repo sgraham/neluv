@@ -1,0 +1,4 @@
+def f():
+  a = 3 b = a
+---
+ParseError(line=2, column=9, got=Token('NAME', 'b'))

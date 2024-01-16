@@ -1,0 +1,14 @@
+def f():
+  a = g()
+  b = h(z())
+---
+TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
+                                     name='f',
+                                     params=[],
+                                     body=Block(entries=[Assign(lhs=Ident(name='a'),
+                                                                rhs=FuncCall(func=Ident(name='g'),
+                                                                             args=[])),
+                                                         Assign(lhs=Ident(name='b'),
+                                                                rhs=FuncCall(func=Ident(name='h'),
+                                                                             args=[FuncCall(func=Ident(name='z'),
+                                                                                            args=[])]))]))]))

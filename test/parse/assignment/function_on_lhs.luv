@@ -1,0 +1,9 @@
+def f():
+  g() = 5
+---
+TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
+                                     name='f',
+                                     params=[],
+                                     body=Block(entries=[Assign(lhs=FuncCall(func=Ident(name='g'),
+                                                                             args=[]),
+                                                                rhs=Number(value=5))]))]))

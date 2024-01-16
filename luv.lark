@@ -79,20 +79,24 @@ macro_with_block_stmt: test_or_star_expr ":" suite
 // int a
 // a = 5
 // int a = 5
-?var_decl_init: typed_uninit_var_decl
-              | typed_or_init_var_decl
-?var_decl_type : dotted_name
-              | "[" "]" var_decl_type -> slice
-              | "[" number "]" var_decl_type -> fixed_array
-              | "*" var_decl_type -> pointer
-              | funcdecl
+?var_decl_init : typed_or_init_var_decl
+               | typed_uninit_var_decl
+
+?var_decl_type : package_name
+               | "[" "]" var_decl_type -> slice
+               | "[" number "]" var_decl_type -> fixed_array
+               | "*" var_decl_type -> pointer
+               | funcdecl
+
+?package_name : package_name "::" name
+              | name -> ident
 
 // Similar to funcdef, but return must be manual, and parameters can't have names
 funcdecl: "def" returntype "(" [parameter_types] ")"
 parameter_types: test ("," test)*
 
 typed_uninit_var_decl : var_decl_type name
-typed_or_init_var_decl: [var_decl_type] name "=" test_or_star_expr
+typed_or_init_var_decl: var_decl_type name "=" test_or_star_expr
 
 
 suite: simple_stmt | _NEWLINE _INDENT stmt+ _DEDENT
@@ -101,9 +105,6 @@ returntype: var_decl_type
 
 ?test: or_test ("if" or_test "else" test)?
      | lambdef
-     | assign_expr
-
-assign_expr: name ":=" test
 
 ?test_nocond: or_test | lambdef_nocond
 
@@ -152,8 +153,6 @@ star_expr: "*" expr
      | "null"    -> const_null
      | "true"    -> const_true
      | "false"   -> const_false
-
-preproc_name: "#" "[" expr "]"
 
 ?string_concat: string+
 

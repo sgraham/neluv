@@ -87,9 +87,9 @@ class VarDecl:
   init: object
 
 @dataclass
-class FieldReference:
+class PackageReference:
   lhs: object
-  rhs: str
+  rhs: object
 
 @dataclass
 class ParseError:

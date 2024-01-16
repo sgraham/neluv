@@ -1,0 +1,8 @@
+def f():
+  a = 3
+---
+TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
+                                     name='f',
+                                     params=[],
+                                     body=Block(entries=[Assign(lhs=Ident(name='a'),
+                                                                rhs=Number(value=3))]))]))

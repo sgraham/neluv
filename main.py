@@ -1,8 +1,14 @@
+import logging
+
 import glob
 import importlib
 import sys
 
-from luv_lark import Lark_StandAlone, PythonIndenter, Tree, Transformer, v_args, UnexpectedToken
+from luv_lark import Lark_StandAlone, PythonIndenter, Tree, Transformer, v_args, UnexpectedToken, logger
+#from lark import Lark, Tree, Transformer, v_args, UnexpectedToken, logger
+#from lark.indenter import PythonIndenter
+
+logger.setLevel(logging.DEBUG)
 import last
 
 this_module = sys.modules[__name__]
@@ -291,14 +297,10 @@ class ToAst(Transformer):
   def const_null(self, children):
     return _KEYWORDS['null']
 
-  def dotted_name(self, children):
-    # ident rather than Ident to get keyword if actually undotted.
-    # This handles `int x`, but not `A.int x` which I think is what I want.
-    if len(children) == 1:
-      return self.ident(children)
+  def package_name(self, children):
     cur = last.Ident(children[-1])
     for i in range(len(children) - 2, -1, -1):
-      cur = last.FieldReference(children[i], cur)
+      cur = last.PackageReference(children[i], cur)
     return cur
 
   def slice(self, children):
@@ -339,19 +341,20 @@ class ToAst(Transformer):
     return last.Assign(children[0], children[1])
 
   def funcdef(self, children):
-    x = children[0]
-    type = children.pop(0) if isinstance(x, last.Type) else _KEYWORDS['auto']
-    name = children.pop(0)
-    x = children[0]
-    params = children.pop(0) if isinstance(x, list) else []
-    body = children.pop(0)
-    return last.FuncDef(type, name, params, body)
+    if len(children) == 2:
+      return last.FuncDef(_KEYWORDS['auto'], children[0], [], children[1])
+    elif len(children) == 3:
+      if isinstance(children[0], last.Type):
+        return last.FuncDef(children[0], children[1], [], children[2])
+      else:
+        return last.FuncDef(_KEYWORDS['auto'], children[0], children[1], children[2])
+    else:
+      return last.FuncDef(*children)
+    assert False, "unhandled case in funcdef"
 
   def funcdecl(self, children):
-    x = children[0]
-    type = children.pop(0) if isinstance(x, last.Type) else _KEYWORDS['auto']
-    x = children[0]
-    params = children.pop(0) if isinstance(x, list) else []
+    type = children[0] or _KEYWORDS['auto']
+    params = children[1]
     return last.FuncType(base=None, rtype=type, params=params)
 
   def parameter_types(self, children):
@@ -368,7 +371,6 @@ class ToAst(Transformer):
 
   def error(self, children):
     return children[0]
-    
 
   '''
   def preproc_stmt(self, children):
@@ -392,14 +394,18 @@ class ToAst(Transformer):
 class Parser:
   def __init__(self):
     self.parser = Lark_StandAlone(postlex=PythonIndenter())
+    #self.parser = Lark(grammar=open('luv.lark').read(),
+                       #parser='lalr',
+                       #postlex=PythonIndenter())
+                       ##cache=True,
+                       ##strict=True)
+    #debug=True, strict=True)
 
   def parse(self, code):
     try:
       return self.parser.parse(code)
     except UnexpectedToken as err:
-      return Tree(
-          'error',
-          children=[last.ParseError(err.line, err.column, err.token)])
+      return Tree('error', children=[last.ParseError(err.line, err.column, err.token)])
 
 def parse_tests(parser):
   import pprint

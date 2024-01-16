@@ -1,27 +1,27 @@
 A a
 b = 4
 A c = 5
-X.Y z
-X.Y.Z w = 0
-X.Y.Z.W q = 1
+X::Y z
+X::Y::Z w = 0
+X::Y::Z::W q = 1
 ---
 TopLevel(body=Block(entries=[VarDecl(type=Ident(name='A'), name='a', init=None),
-                             VarDecl(type=None, name='b', init=Number(value=4)),
+                             Assign(lhs=Ident(name='b'), rhs=Number(value=4)),
                              VarDecl(type=Ident(name='A'),
                                      name='c',
                                      init=Number(value=5)),
-                             VarDecl(type=FieldReference(lhs='X',
-                                                         rhs=Ident(name='Y')),
+                             VarDecl(type=PackageReference(lhs=Ident(name='X'),
+                                                           rhs=Ident(name='Y')),
                                      name='z',
                                      init=None),
-                             VarDecl(type=FieldReference(lhs='X',
-                                                         rhs=FieldReference(lhs='Y',
-                                                                            rhs=Ident(name='Z'))),
+                             VarDecl(type=PackageReference(lhs=PackageReference(lhs=Ident(name='X'),
+                                                                                rhs=Ident(name='Y')),
+                                                           rhs=Ident(name='Z')),
                                      name='w',
                                      init=Number(value=0)),
-                             VarDecl(type=FieldReference(lhs='X',
-                                                         rhs=FieldReference(lhs='Y',
-                                                                            rhs=FieldReference(lhs='Z',
-                                                                                               rhs=Ident(name='W')))),
+                             VarDecl(type=PackageReference(lhs=PackageReference(lhs=PackageReference(lhs=Ident(name='X'),
+                                                                                                     rhs=Ident(name='Y')),
+                                                                                rhs=Ident(name='Z')),
+                                                           rhs=Ident(name='W')),
                                      name='q',
                                      init=Number(value=1))]))
