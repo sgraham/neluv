@@ -6,6 +6,6 @@ TopLevel(body=Block(entries=[FuncDef(rtype=FuncType(base=None,
                                                     params=[Type(base='i32'),
                                                             Type(base='f32')]),
                                      name='Func',
-                                     params=[TypedParam(type=Type(base='bool'),
-                                                        name='z')],
+                                     params=[TypedVar(type=Type(base='bool'),
+                                                      name='z')],
                                      body=Block(entries=[Return(value=Const(name='null'))]))]))

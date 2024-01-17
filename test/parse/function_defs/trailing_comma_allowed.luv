@@ -3,6 +3,6 @@ def func(bool x,):
 ---
 TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
                                      name='func',
-                                     params=[TypedParam(type=Type(base='bool'),
-                                                        name='x')],
+                                     params=[TypedVar(type=Type(base='bool'),
+                                                      name='x')],
                                      body=Block(entries=[Pass()]))]))

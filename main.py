@@ -4,9 +4,11 @@ import glob
 import importlib
 import sys
 
-from luv_lark import Lark_StandAlone, PythonIndenter, Tree, Transformer, v_args, UnexpectedToken, logger
-#from lark import Lark, Tree, Transformer, v_args, UnexpectedToken, logger
-#from lark.indenter import PythonIndenter
+if 1:
+  from luv_lark import Lark_StandAlone, PythonIndenter, Tree, Transformer, v_args, UnexpectedToken, logger
+else:
+  from lark import Lark, Tree, Transformer, v_args, UnexpectedToken, logger
+  from lark.indenter import PythonIndenter
 
 logger.setLevel(logging.DEBUG)
 import last
@@ -277,7 +279,7 @@ class ToAst(Transformer):
     return v[1:-1]
 
   def funccall(self, children):
-    return last.FuncCall(children[0], children[1] if len(children) > 1 else [])
+    return last.FuncCall(children[0], children[1] or [] if len(children) > 1 else [])
 
   def arguments(self, children):
     return children
@@ -297,11 +299,14 @@ class ToAst(Transformer):
   def const_null(self, children):
     return _KEYWORDS['null']
 
-  def package_name(self, children):
+  def name_with_package(self, children):
     cur = last.Ident(children[-1])
     for i in range(len(children) - 2, -1, -1):
       cur = last.PackageReference(children[i], cur)
     return cur
+
+  def arith_expr(self, children):
+    return last.ArithExpr(children[0], children[2], children[1])
 
   def slice(self, children):
     return last.SliceDecl(children[0])
@@ -312,14 +317,14 @@ class ToAst(Transformer):
   def pointer(self, children):
     return last.PointerDecl(children[0])
 
-  def typed_uninit_var_decl(self, children):
-    return last.VarDecl(children[0], children[1], None)
+  def type_for_var(self, children):
+    return children[0]
 
-  def typed_or_init_var_decl(self, children):
-    if len(children) > 2:
-      return last.VarDecl(children[0], children[1], children[2])
-    else:
-      return last.VarDecl(None, children[0], children[1])
+  def typed_var(self, children):
+    return last.TypedVar(children[0], children[1])
+
+  def var_decl_init(self, children):
+    return last.VarDecl(children[0].type, children[0].name, children[1])
 
   def macro_with_block_stmt(self, children):
     return last.MacroCallWithBlock(children[0], children[1])
@@ -348,8 +353,11 @@ class ToAst(Transformer):
         return last.FuncDef(children[0], children[1], [], children[2])
       else:
         return last.FuncDef(_KEYWORDS['auto'], children[0], children[1], children[2])
-    else:
-      return last.FuncDef(*children)
+    elif len(children) == 4:
+      return last.FuncDef(children[0] or _KEYWORDS['auto'],
+                          children[1],
+                          children[2] or [],
+                          children[3])
     assert False, "unhandled case in funcdef"
 
   def funcdecl(self, children):
@@ -361,7 +369,7 @@ class ToAst(Transformer):
     return children
 
   def typedparam(self, children):
-    return last.TypedParam(children[0], children[1])
+    return last.TypedVar(children[0], children[1])
 
   def parameters(self, children):
     return children
@@ -393,13 +401,15 @@ class ToAst(Transformer):
 
 class Parser:
   def __init__(self):
-    self.parser = Lark_StandAlone(postlex=PythonIndenter())
-    #self.parser = Lark(grammar=open('luv.lark').read(),
-                       #parser='lalr',
-                       #postlex=PythonIndenter())
-                       ##cache=True,
-                       ##strict=True)
-    #debug=True, strict=True)
+    try:
+      self.parser = Lark_StandAlone(postlex=PythonIndenter())
+    except:
+      self.parser = Lark(grammar=open('luv.lark').read(),
+                        parser='lalr',
+                        postlex=PythonIndenter(),
+                        #cache=True,
+                        #debug=True,
+                        strict=True)
 
   def parse(self, code):
     try:
@@ -437,15 +447,15 @@ def main():
   if len(sys.argv) == 2 and sys.argv[1] == 'test':
     parse_tests(parser)
   else:
-    tree = parser.parse(_TEST_CODE)
+    tree = parser.parse(open(sys.argv[1]).read())
     print(tree.pretty(), file=sys.stderr)
 
     ast = ToAst(visit_tokens=True).transform(tree)
     import pprint
     pprint.pprint(ast, stream=sys.stderr)
 
-    cctx = CompilerContext()
-    print(cctx.codegen(ast))
+    #cctx = CompilerContext()
+    #print(cctx.codegen(ast))
 
     '''
     class MacroContext:

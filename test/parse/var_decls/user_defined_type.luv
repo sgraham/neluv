@@ -5,15 +5,14 @@ X::Y z
 X::Y::Z w = 0
 X::Y::Z::W q = 1
 ---
-TopLevel(body=Block(entries=[VarDecl(type=Ident(name='A'), name='a', init=None),
+TopLevel(body=Block(entries=[TypedVar(type=Ident(name='A'), name='a'),
                              Assign(lhs=Ident(name='b'), rhs=Number(value=4)),
                              VarDecl(type=Ident(name='A'),
                                      name='c',
                                      init=Number(value=5)),
-                             VarDecl(type=PackageReference(lhs=Ident(name='X'),
-                                                           rhs=Ident(name='Y')),
-                                     name='z',
-                                     init=None),
+                             TypedVar(type=PackageReference(lhs=Ident(name='X'),
+                                                            rhs=Ident(name='Y')),
+                                      name='z'),
                              VarDecl(type=PackageReference(lhs=PackageReference(lhs=Ident(name='X'),
                                                                                 rhs=Ident(name='Y')),
                                                            rhs=Ident(name='Z')),

@@ -36,7 +36,14 @@ lambda_kwparams: "**" name ","?
 expr_stmt: testlist_star_expr
 assign_stmt: augassign | assign
 
+typed_var: name_with_package name
+         | "[" "]" typed_var -> slice
+         | "[" number "]" typed_var -> fixed_array
+         | "*" typed_var -> pointer
+      
 assign: testlist_star_expr ("=" testlist_star_expr)+
+      | typed_var ("=" testlist_star_expr)+ -> var_decl_init
+ 
 augassign: testlist_star_expr augassign_op testlist
 !augassign_op: "+=" | "-=" | "*=" | "@=" | "/=" | "%=" | "&=" | "|=" | "^=" | "<<=" | ">>=" | "**=" | "//="
 ?testlist_star_expr: test_or_star_expr
@@ -63,7 +70,7 @@ nonlocal_stmt: "nonlocal" name ("," name)*
 assert_stmt: "assert" test ["," test]
 
 ?compound_stmt: if_stmt | while_stmt | for_stmt | macro_with_block_stmt
-              | with_stmt | funcdef | structdef | uniondef | var_decl_init
+              | with_stmt | funcdef | structdef | uniondef | uninit_var_decl
 if_stmt: "if" test ":" suite elifs ["else" ":" suite]
 elifs: elif_*
 elif_: "elif" test ":" suite
@@ -76,27 +83,29 @@ with_item: test ["as" name]
 
 macro_with_block_stmt: test_or_star_expr ":" suite
 
+?uninit_var_decl: typed_var
+
 // int a
 // a = 5
 // int a = 5
 ?var_decl_init : typed_or_init_var_decl
                | typed_uninit_var_decl
 
-?var_decl_type : package_name
+?var_decl_type : name_with_package
                | "[" "]" var_decl_type -> slice
                | "[" number "]" var_decl_type -> fixed_array
                | "*" var_decl_type -> pointer
                | funcdecl
 
-?package_name : package_name "::" name
-              | name -> ident
+?name_with_package: name_with_package "::" name
+                  | name -> ident
 
-// Similar to funcdef, but return must be manual, and parameters can't have names
+// Similar to funcdef, but return must be included, and parameters can't have names
 funcdecl: "def" returntype "(" [parameter_types] ")"
 parameter_types: test ("," test)*
 
 typed_uninit_var_decl : var_decl_type name
-typed_or_init_var_decl: var_decl_type name "=" test_or_star_expr
+typed_or_init_var_decl: var_decl_type name "=" test
 
 
 suite: simple_stmt | _NEWLINE _INDENT stmt+ _DEDENT
@@ -204,7 +213,7 @@ string: STRING | LONG_STRING
 
 // Other terminals
 
-_NEWLINE: ( /\r?\n[\t ]*/ | COMMENT )+
+_NEWLINE: ( /\r?\n[\t ]*/ )+
 
 %ignore /[\t \f]+/  // WS
 %ignore /\\[\t \f]*\r?\n/   // LINE_CONT

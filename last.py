@@ -63,11 +63,6 @@ class PointerDecl(Type):
   pass
 
 @dataclass
-class TypedParam:
-  type: Type
-  name: str
-
-@dataclass
 class MacroCallWithBlock:
   func: FuncCall
   body: Block
@@ -81,10 +76,21 @@ class Pass:
   pass
 
 @dataclass
+class TypedVar:
+  type: Type
+  name: str
+
+@dataclass
 class VarDecl:
   type: object
   name: str
   init: object
+
+@dataclass
+class ArithExpr:
+  lhs: object
+  rhs: object
+  op: object
 
 @dataclass
 class PackageReference:

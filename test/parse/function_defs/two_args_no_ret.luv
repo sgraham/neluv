@@ -3,8 +3,8 @@ def func(bool x, int y):
 ---
 TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
                                      name='func',
-                                     params=[TypedParam(type=Type(base='bool'),
-                                                        name='x'),
-                                             TypedParam(type=Type(base='i32'),
-                                                        name='y')],
+                                     params=[TypedVar(type=Type(base='bool'),
+                                                      name='x'),
+                                             TypedVar(type=Type(base='i32'),
+                                                      name='y')],
                                      body=Block(entries=[Pass()]))]))
