@@ -5,19 +5,9 @@ start: (_NEWLINE | stmt)*
 
 funcdef: "def" [returntype] name "(" [parameters] ")" ":" suite
 
-parameters: paramvalue ("," paramvalue)* ["," SLASH ("," paramvalue)*] ["," [starparams | kwparams]]
-          | starparams
-          | kwparams
-
-SLASH: "/" // Otherwise the it will completely disappear and it will be undisguisable in the result
-starparams: (starparam | starguard) poststarparams
-starparam: "*" typedparam
-starguard: "*"
-poststarparams: ("," paramvalue)* ["," kwparams]
-kwparams: "**" typedparam ","?
-
+parameters: paramvalue ("," paramvalue)* ","?
 ?paramvalue: typedparam ("=" test)?
-?typedparam: test? name
+?typedparam: test name
 
 
 lambdef: "lambda" [lambda_params] ":" test
@@ -36,11 +26,23 @@ lambda_kwparams: "**" name ","?
 expr_stmt: testlist_star_expr
 assign_stmt: augassign | assign
 
-typed_var: name_with_package name
-         | "[" "]" typed_var -> slice
-         | "[" number "]" typed_var -> fixed_array
-         | "*" typed_var -> pointer
-      
+?var_decl_type : name_with_package
+               | "[" "]" var_decl_type -> slice_decl
+               | "[" number "]" var_decl_type -> fixed_array_decl
+               | "*" var_decl_type -> pointer_decl
+               | funcdecl
+
+?name_with_package: name_with_package "::" name
+                  | name -> ident
+
+// Similar to funcdef, but return must be included, and parameters can't have names
+funcdecl: "def" returntype "(" [parameter_types] ")"
+parameter_types: test ("," test)*
+
+typed_var: var_decl_type name
+
+returntype: var_decl_type
+
 assign: testlist_star_expr ("=" testlist_star_expr)+
       | typed_var ("=" testlist_star_expr)+ -> var_decl_init
  
@@ -85,32 +87,7 @@ macro_with_block_stmt: test_or_star_expr ":" suite
 
 ?uninit_var_decl: typed_var
 
-// int a
-// a = 5
-// int a = 5
-?var_decl_init : typed_or_init_var_decl
-               | typed_uninit_var_decl
-
-?var_decl_type : name_with_package
-               | "[" "]" var_decl_type -> slice
-               | "[" number "]" var_decl_type -> fixed_array
-               | "*" var_decl_type -> pointer
-               | funcdecl
-
-?name_with_package: name_with_package "::" name
-                  | name -> ident
-
-// Similar to funcdef, but return must be included, and parameters can't have names
-funcdecl: "def" returntype "(" [parameter_types] ")"
-parameter_types: test ("," test)*
-
-typed_uninit_var_decl : var_decl_type name
-typed_or_init_var_decl: var_decl_type name "=" test
-
-
 suite: simple_stmt | _NEWLINE _INDENT stmt+ _DEDENT
-
-returntype: var_decl_type
 
 ?test: or_test ("if" or_test "else" test)?
      | lambdef

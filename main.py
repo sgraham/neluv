@@ -4,7 +4,7 @@ import glob
 import importlib
 import sys
 
-if 1:
+if True:
   from luv_lark import Lark_StandAlone, PythonIndenter, Tree, Transformer, v_args, UnexpectedToken, logger
 else:
   from lark import Lark, Tree, Transformer, v_args, UnexpectedToken, logger
@@ -308,13 +308,13 @@ class ToAst(Transformer):
   def arith_expr(self, children):
     return last.ArithExpr(children[0], children[2], children[1])
 
-  def slice(self, children):
+  def slice_decl(self, children):
     return last.SliceDecl(children[0])
 
-  def fixed_array(self, children):
+  def fixed_array_decl(self, children):
     return last.FixedArrayDecl(size=children[0], base=children[1])
 
-  def pointer(self, children):
+  def pointer_decl(self, children):
     return last.PointerDecl(children[0])
 
   def type_for_var(self, children):
@@ -405,7 +405,7 @@ class Parser:
       self.parser = Lark_StandAlone(postlex=PythonIndenter())
     except:
       self.parser = Lark(grammar=open('luv.lark').read(),
-                        parser='lalr',
+                        parser='earley',
                         postlex=PythonIndenter(),
                         #cache=True,
                         #debug=True,
