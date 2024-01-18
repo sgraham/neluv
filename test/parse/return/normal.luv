@@ -1,0 +1,7 @@
+def int func():
+  return 2
+---
+TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='i32'),
+                                     name='func',
+                                     params=[],
+                                     body=Block(entries=[Return(value=Number(value=2))]))]))
