@@ -96,7 +96,12 @@ class VarDecl:
   init: object
 
 @dataclass
-class ArithExpr:
+class UnaryExpr:
+  op: object
+  obj: object
+
+@dataclass
+class BinaryExpr:
   lhs: object
   rhs: object
   op: object

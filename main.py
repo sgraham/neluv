@@ -310,10 +310,16 @@ class ToAst(Transformer):
     return last.GetAttr(children[0], children[1])
 
   def arith_expr(self, children):
-    return last.ArithExpr(children[0], children[2], children[1])
+    return last.BinaryExpr(children[0], children[2], children[1])
 
   def term(self, children):
-    return last.ArithExpr(children[0], children[2], children[1])
+    return last.BinaryExpr(children[0], children[2], children[1])
+
+  def factor(self, children):
+    if len(children) == 2:
+      return last.UnaryExpr(children[0], children[1])
+    else:
+      return last.BinaryExpr(children[0], children[2], children[1])
 
   def comparison(self, children):
     assert (len(children) - 3) % 2 == 0

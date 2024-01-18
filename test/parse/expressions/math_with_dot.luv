@@ -5,7 +5,7 @@ TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
                                      name='f',
                                      params=[],
                                      body=Block(entries=[Assign(lhs=Ident(name='x'),
-                                                                rhs=ArithExpr(lhs=Number(value=3),
-                                                                              rhs=GetAttr(lhs=Ident(name='a'),
-                                                                                          rhs='b'),
-                                                                              op=Op(name='*')))]))]))
+                                                                rhs=BinaryExpr(lhs=Number(value=3),
+                                                                               rhs=GetAttr(lhs=Ident(name='a'),
+                                                                                           rhs='b'),
+                                                                               op=Op(name='*')))]))]))
