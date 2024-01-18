@@ -4,11 +4,9 @@ import glob
 import importlib
 import sys
 
-if True:
-  from luv_lark import Lark_StandAlone, PythonIndenter, Tree, Transformer, v_args, UnexpectedToken, logger
-else:
-  from lark import Lark, Tree, Transformer, v_args, UnexpectedToken, logger
-  from lark.indenter import PythonIndenter
+#from luv_lark import Lark_StandAlone, PythonIndenter, Tree, Transformer, v_args, UnexpectedToken, logger
+from lark import Lark, Tree, Transformer, v_args, UnexpectedToken, logger
+from lark.indenter import PythonIndenter
 
 logger.setLevel(logging.DEBUG)
 import last
@@ -401,15 +399,22 @@ class ToAst(Transformer):
 
 class Parser:
   def __init__(self):
-    try:
-      self.parser = Lark_StandAlone(postlex=PythonIndenter())
-    except:
-      self.parser = Lark(grammar=open('luv.lark').read(),
-                        parser='earley',
-                        postlex=PythonIndenter(),
-                        #cache=True,
-                        #debug=True,
-                        strict=True)
+    #self.parser = Lark_StandAlone(postlex=PythonIndenter())
+    # TODO: Bailed on LR(1) due to var decl syntax:
+    # e.g.
+    #   def x(int, float) my_function_pointer
+    #   // a pointer to a function returning `x` taking (int, float)
+    # vs.
+    #   def x(int x, float y):
+    #   // the start of a function definition
+    #     ...
+    self.parser = Lark(grammar=open('luv.lark').read(),
+                       parser='earley',
+                       lexer='basic',
+                       postlex=PythonIndenter(),
+                       #cache=True,
+                       #debug=True,
+                       strict=True)
 
   def parse(self, code):
     try:
