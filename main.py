@@ -276,6 +276,9 @@ class ToAst(Transformer):
   def STRING(self, v):
     return v[1:-1]
 
+  def __default_token__(self, tok):
+    return last.Op(tok.value)
+
   def funccall(self, children):
     return last.FuncCall(children[0], children[1] or [] if len(children) > 1 else [])
 
@@ -303,8 +306,21 @@ class ToAst(Transformer):
       cur = last.PackageReference(children[i], cur)
     return cur
 
+  def getattr(self, children):
+    return last.GetAttr(children[0], children[1])
+
   def arith_expr(self, children):
     return last.ArithExpr(children[0], children[2], children[1])
+
+  def term(self, children):
+    return last.ArithExpr(children[0], children[2], children[1])
+
+  def comparison(self, children):
+    assert (len(children) - 3) % 2 == 0
+    return last.CompExpr(children)
+
+  def comp_op(self, children):
+    return children[0]
 
   def slice_decl(self, children):
     return last.SliceDecl(children[0])

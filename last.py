@@ -22,6 +22,15 @@ class Ident:
   name: object
 
 @dataclass
+class Op:
+  name: str
+
+@dataclass
+class GetAttr:
+  lhs: object
+  rhs: str
+
+@dataclass
 class Assign:
   lhs: object
   rhs: object
@@ -91,6 +100,14 @@ class ArithExpr:
   lhs: object
   rhs: object
   op: object
+
+@dataclass
+class CompExpr:
+  # 3 + 2n long:
+  #   VAL0 cmp0 VAL1 [cmp1 VAL2 ...]
+  # for x < y < z
+  # === x < y and y < z, but y only eval once.
+  chain: list[object]
 
 @dataclass
 class PackageReference:

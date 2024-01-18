@@ -1,0 +1,14 @@
+def f():
+  x = a*3<4==b
+---
+TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
+                                     name='f',
+                                     params=[],
+                                     body=Block(entries=[Assign(lhs=Ident(name='x'),
+                                                                rhs=CompExpr(chain=[ArithExpr(lhs=Ident(name='a'),
+                                                                                              rhs=Number(value=3),
+                                                                                              op=Op(name='*')),
+                                                                                    Op(name='<'),
+                                                                                    Number(value=4),
+                                                                                    Op(name='=='),
+                                                                                    Ident(name='b')]))]))]))

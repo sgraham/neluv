@@ -8,4 +8,4 @@ TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
                                                                  name='x',
                                                                  init=ArithExpr(lhs=Number(value=1),
                                                                                 rhs=Number(value=2),
-                                                                                op=Token('PLUS', '+')))]))]))
+                                                                                op=Op(name='+')))]))]))
