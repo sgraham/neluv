@@ -1,0 +1,18 @@
+def int stuff(int a, int b):
+  if a < b:
+    return a
+  return b
+---
+TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='i32'),
+                                     name='stuff',
+                                     params=[TypedVar(type=Type(base='i32'),
+                                                      name='a'),
+                                             TypedVar(type=Type(base='i32'),
+                                                      name='b')],
+                                     body=Block(entries=[If(cond=CompExpr(chain=[Ident(name='a'),
+                                                                                 Op(name='<'),
+                                                                                 Ident(name='b')]),
+                                                            body=Block(entries=[Return(value=Ident(name='a'))]),
+                                                            elifs=[],
+                                                            els=None),
+                                                         Return(value=Ident(name='b'))]))]))

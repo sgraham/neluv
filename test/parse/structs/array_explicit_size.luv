@@ -1,0 +1,7 @@
+struct X:
+  [3]float position
+---
+TopLevel(body=Block(entries=[Struct(name='X',
+                                    members=[TypedVar(type=FixedArrayDecl(base=Type(base='f32'),
+                                                                          size=Number(value=3)),
+                                                      name='position')])]))

@@ -92,6 +92,18 @@ class For:
   els: Block
 
 @dataclass
+class Elif:
+  cond: object
+  body: Block
+
+@dataclass
+class If:
+  cond: object
+  body: Block
+  elifs: list[Elif]
+  els: Block
+
+@dataclass
 class TypedVar:
   type: Type
   name: str
@@ -133,6 +145,11 @@ class GetItem:
 
 @dataclass
 class Struct:
+  name: str
+  members: list[Type]
+
+@dataclass
+class Union:
   name: str
   members: list[Type]
 

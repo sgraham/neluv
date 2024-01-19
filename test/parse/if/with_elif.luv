@@ -1,0 +1,14 @@
+def f():
+  if false:
+    pass
+  elif true:
+    pass
+---
+TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
+                                     name='f',
+                                     params=[],
+                                     body=Block(entries=[If(cond=Const(name='false'),
+                                                            body=Block(entries=[Pass()]),
+                                                            elifs=[Elif(cond=Const(name='true'),
+                                                                        body=Block(entries=[Pass()]))],
+                                                            els=None)]))]))

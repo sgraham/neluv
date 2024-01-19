@@ -1,0 +1,24 @@
+def f():
+  if false:
+    print(1)
+  elif true:
+    print(2)
+  elif false:
+    print(3)
+  else:
+    print(4)
+---
+TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
+                                     name='f',
+                                     params=[],
+                                     body=Block(entries=[If(cond=Const(name='false'),
+                                                            body=Block(entries=[FuncCall(func=Ident(name='print'),
+                                                                                         args=[Number(value=1)])]),
+                                                            elifs=[Elif(cond=Const(name='true'),
+                                                                        body=Block(entries=[FuncCall(func=Ident(name='print'),
+                                                                                                     args=[Number(value=2)])])),
+                                                                   Elif(cond=Const(name='false'),
+                                                                        body=Block(entries=[FuncCall(func=Ident(name='print'),
+                                                                                                     args=[Number(value=3)])]))],
+                                                            els=Block(entries=[FuncCall(func=Ident(name='print'),
+                                                                                        args=[Number(value=4)])]))]))]))

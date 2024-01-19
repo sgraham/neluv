@@ -1,0 +1,19 @@
+def int main():
+  int x
+  for i in 5:
+    x = x + i
+  return x
+---
+TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='i32'),
+                                     name='main',
+                                     params=[],
+                                     body=Block(entries=[TypedVar(type=Type(base='i32'),
+                                                                  name='x'),
+                                                         For(it=Ident(name='i'),
+                                                             collection=Number(value=5),
+                                                             body=Block(entries=[Assign(lhs=Ident(name='x'),
+                                                                                        rhs=BinaryExpr(lhs=Ident(name='x'),
+                                                                                                       rhs=Ident(name='i'),
+                                                                                                       op=Op(name='+')))]),
+                                                             els=None),
+                                                         Return(value=Ident(name='x'))]))]))

@@ -1,0 +1,4 @@
+struct X:
+  [float 3]float pos
+---
+ParseError(line=2, column=4, got=Token('NAME', 'float'))

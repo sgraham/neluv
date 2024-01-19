@@ -1,0 +1,10 @@
+def f():
+  a.b.c = 4
+---
+TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
+                                     name='f',
+                                     params=[],
+                                     body=Block(entries=[Assign(lhs=GetAttr(lhs=GetAttr(lhs=Ident(name='a'),
+                                                                                        rhs='b'),
+                                                                            rhs='c'),
+                                                                rhs=Number(value=4))]))]))

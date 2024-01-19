@@ -1,0 +1,6 @@
+struct Stuff:
+  int x
+---
+TopLevel(body=Block(entries=[Struct(name='Stuff',
+                                    members=[TypedVar(type=Type(base='i32'),
+                                                      name='x')])]))

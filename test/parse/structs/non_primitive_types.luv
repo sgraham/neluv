@@ -1,0 +1,18 @@
+struct B:
+  int boo
+
+struct A:
+  bool x
+  B y
+  bool z
+---
+TopLevel(body=Block(entries=[Struct(name='B',
+                                    members=[TypedVar(type=Type(base='i32'),
+                                                      name='boo')]),
+                             Struct(name='A',
+                                    members=[TypedVar(type=Type(base='bool'),
+                                                      name='x'),
+                                             TypedVar(type=Ident(name='B'),
+                                                      name='y'),
+                                             TypedVar(type=Type(base='bool'),
+                                                      name='z')])]))

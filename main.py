@@ -300,6 +300,12 @@ class ToAst(Transformer):
   def const_null(self, children):
     return _KEYWORDS['null']
 
+  def const_true(self, children):
+    return _KEYWORDS['true']
+
+  def const_false(self, children):
+    return _KEYWORDS['false']
+
   def name_with_package(self, children):
     cur = last.Ident(children[-1])
     for i in range(len(children) - 2, -1, -1):
@@ -362,11 +368,23 @@ class ToAst(Transformer):
   def for_stmt(self, children):
     return last.For(children[0], children[1], children[2], children[3])
 
+  def if_stmt(self, children):
+    return last.If(children[0], children[1], children[2], children[3])
+
+  def elif_(self, children):
+    return last.Elif(children[0], children[1])
+
+  def elifs(self, children):
+    return children
+
   def getitem(self, children):
     return last.GetItem(children[0], children[1])
 
   def structdef(self, children):
     return last.Struct(children[0], children[1])
+
+  def uniondef(self, children):
+    return last.Union(children[0], children[1])
 
   def struct_union_types(self, children):
     for x in children:

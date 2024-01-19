@@ -1,0 +1,15 @@
+struct Thing:
+  int x
+  bool y
+  float z
+  u32 w
+---
+TopLevel(body=Block(entries=[Struct(name='Thing',
+                                    members=[TypedVar(type=Type(base='i32'),
+                                                      name='x'),
+                                             TypedVar(type=Type(base='bool'),
+                                                      name='y'),
+                                             TypedVar(type=Type(base='f32'),
+                                                      name='z'),
+                                             TypedVar(type=Type(base='u32'),
+                                                      name='w')])]))
