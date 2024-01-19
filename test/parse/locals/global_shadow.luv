@@ -1,0 +1,16 @@
+int x = 2
+def func():
+  int x = 3
+  print(x)
+---
+TopLevel(body=Block(entries=[VarDecl(type=Type(base='i32'),
+                                     name='x',
+                                     init=Number(value=2)),
+                             FuncDef(rtype=Type(base='auto'),
+                                     name='func',
+                                     params=[],
+                                     body=Block(entries=[VarDecl(type=Type(base='i32'),
+                                                                 name='x',
+                                                                 init=Number(value=3)),
+                                                         FuncCall(func=Ident(name='print'),
+                                                                  args=[Ident(name='x')])]))]))

@@ -1,0 +1,12 @@
+// No duplication check at parser level.
+def f():
+  int x
+  int x
+---
+TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
+                                     name='f',
+                                     params=[],
+                                     body=Block(entries=[TypedVar(type=Type(base='i32'),
+                                                                  name='x'),
+                                                         TypedVar(type=Type(base='i32'),
+                                                                  name='x')]))]))

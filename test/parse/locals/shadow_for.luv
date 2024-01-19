@@ -1,0 +1,15 @@
+def stuff():
+  int x
+  for x in y:
+    print(x)
+---
+TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
+                                     name='stuff',
+                                     params=[],
+                                     body=Block(entries=[TypedVar(type=Type(base='i32'),
+                                                                  name='x'),
+                                                         For(it=Ident(name='x'),
+                                                             collection=Ident(name='y'),
+                                                             body=Block(entries=[FuncCall(func=Ident(name='print'),
+                                                                                          args=[Ident(name='x')])]),
+                                                             els=None)]))]))

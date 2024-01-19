@@ -344,7 +344,11 @@ class ToAst(Transformer):
     return last.TypedVar(children[0], children[1])
 
   def var_decl_init(self, children):
-    return last.VarDecl(children[0].type, children[0].name, children[1])
+    if len(children) == 1:
+      assert isinstance(children[0], last.TypedVar)
+      return children[0]
+    else:
+      return last.VarDecl(children[0].type, children[0].name, children[1])
 
   def macro_with_block_stmt(self, children):
     return last.MacroCallWithBlock(children[0], children[1])
@@ -354,6 +358,9 @@ class ToAst(Transformer):
 
   def pass_stmt(self, children):
     return last.Pass()
+
+  def for_stmt(self, children):
+    return last.For(children[0], children[1], children[2], children[3])
 
   def returntype(self, children):
     #assert isinstance(children[0], last.Type)
@@ -474,8 +481,10 @@ def main():
   if len(sys.argv) == 2 and sys.argv[1] == 'test':
     parse_tests(parser)
   else:
-    tree = parser.parse(open(sys.argv[1]).read())
-    print(tree.pretty(), file=sys.stderr)
+    contents = open(sys.argv[1]).read()
+    source, _, backmatter = contents.partition('\n---\n')
+    tree = parser.parse(source + '\n')
+    #print(tree.pretty(), file=sys.stderr)
 
     ast = ToAst(visit_tokens=True).transform(tree)
     import pprint

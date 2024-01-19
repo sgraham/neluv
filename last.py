@@ -85,6 +85,13 @@ class Pass:
   pass
 
 @dataclass
+class For:
+  it: object
+  collection: object
+  body: Block
+  els: Block
+
+@dataclass
 class TypedVar:
   type: Type
   name: str

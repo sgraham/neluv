@@ -1,0 +1,13 @@
+// Not sure if this should be an error or not, but probably not at parser level.
+def func(int x):
+  int x
+  print(x)
+---
+TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
+                                     name='func',
+                                     params=[TypedVar(type=Type(base='i32'),
+                                                      name='x')],
+                                     body=Block(entries=[TypedVar(type=Type(base='i32'),
+                                                                  name='x'),
+                                                         FuncCall(func=Ident(name='print'),
+                                                                  args=[Ident(name='x')])]))]))

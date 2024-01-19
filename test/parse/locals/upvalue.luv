@@ -1,0 +1,32 @@
+int x = 1
+
+def func1():
+  int y = 2
+
+  def func2():
+    int z = 3
+    print(x)
+    print(y)
+    print(z)
+---
+TopLevel(body=Block(entries=[VarDecl(type=Type(base='i32'),
+                                     name='x',
+                                     init=Number(value=1)),
+                             FuncDef(rtype=Type(base='auto'),
+                                     name='func1',
+                                     params=[],
+                                     body=Block(entries=[VarDecl(type=Type(base='i32'),
+                                                                 name='y',
+                                                                 init=Number(value=2)),
+                                                         FuncDef(rtype=Type(base='auto'),
+                                                                 name='func2',
+                                                                 params=[],
+                                                                 body=Block(entries=[VarDecl(type=Type(base='i32'),
+                                                                                             name='z',
+                                                                                             init=Number(value=3)),
+                                                                                     FuncCall(func=Ident(name='print'),
+                                                                                              args=[Ident(name='x')]),
+                                                                                     FuncCall(func=Ident(name='print'),
+                                                                                              args=[Ident(name='y')]),
+                                                                                     FuncCall(func=Ident(name='print'),
+                                                                                              args=[Ident(name='z')])]))]))]))

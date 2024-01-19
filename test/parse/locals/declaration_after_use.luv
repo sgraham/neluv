@@ -1,0 +1,13 @@
+// This doesn't error at the parser level because the check for globals has to
+// happen later.
+def f():
+  x = 5
+  int x
+---
+TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
+                                     name='f',
+                                     params=[],
+                                     body=Block(entries=[Assign(lhs=Ident(name='x'),
+                                                                rhs=Number(value=5)),
+                                                         TypedVar(type=Type(base='i32'),
+                                                                  name='x')]))]))

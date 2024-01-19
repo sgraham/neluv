@@ -44,7 +44,7 @@ typed_var: var_decl_type name
 returntype: var_decl_type
 
 assign: testlist_star_expr ("=" testlist_star_expr)+
-      | typed_var ("=" testlist_star_expr)+ -> var_decl_init
+      | typed_var ("=" testlist_star_expr)* -> var_decl_init
  
 augassign: testlist_star_expr augassign_op testlist
 !augassign_op: "+=" | "-=" | "*=" | "@=" | "/=" | "%=" | "&=" | "|=" | "^=" | "<<=" | ">>=" | "**=" | "//="
@@ -72,7 +72,7 @@ nonlocal_stmt: "nonlocal" name ("," name)*
 assert_stmt: "assert" test ["," test]
 
 ?compound_stmt: if_stmt | while_stmt | for_stmt | macro_with_block_stmt
-              | with_stmt | funcdef | structdef | uniondef | uninit_var_decl
+              | with_stmt | funcdef | structdef | uniondef
 if_stmt: "if" test ":" suite elifs ["else" ":" suite]
 elifs: elif_*
 elif_: "elif" test ":" suite
@@ -84,8 +84,6 @@ with_items: with_item ("," with_item)*
 with_item: test ["as" name]
 
 macro_with_block_stmt: test_or_star_expr ":" suite
-
-?uninit_var_decl: typed_var
 
 suite: simple_stmt | _NEWLINE _INDENT stmt+ _DEDENT
 
