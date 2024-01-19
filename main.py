@@ -362,6 +362,17 @@ class ToAst(Transformer):
   def for_stmt(self, children):
     return last.For(children[0], children[1], children[2], children[3])
 
+  def getitem(self, children):
+    return last.GetItem(children[0], children[1])
+
+  def structdef(self, children):
+    return last.Struct(children[0], children[1])
+
+  def struct_union_types(self, children):
+    for x in children:
+      assert isinstance(x, last.TypedVar)
+    return children
+
   def returntype(self, children):
     #assert isinstance(children[0], last.Type)
     return children[0]

@@ -1,0 +1,17 @@
+struct Thing:
+  int x
+
+def int main():
+  *Thing p
+  return p.x
+---
+TopLevel(body=Block(entries=[Struct(name='Thing',
+                                    members=[TypedVar(type=Type(base='i32'),
+                                                      name='x')]),
+                             FuncDef(rtype=Type(base='i32'),
+                                     name='main',
+                                     params=[],
+                                     body=Block(entries=[TypedVar(type=PointerDecl(base=Ident(name='Thing')),
+                                                                  name='p'),
+                                                         Return(value=GetAttr(lhs=Ident(name='p'),
+                                                                              rhs='x'))]))]))

@@ -1,0 +1,15 @@
+def stuff():
+  [4]int things
+  *int p = &things[2]
+---
+TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
+                                     name='stuff',
+                                     params=[],
+                                     body=Block(entries=[TypedVar(type=FixedArrayDecl(base=Type(base='i32'),
+                                                                                      size=Number(value=4)),
+                                                                  name='things'),
+                                                         VarDecl(type=PointerDecl(base=Type(base='i32')),
+                                                                 name='p',
+                                                                 init=UnaryExpr(op=Op(name='&'),
+                                                                                obj=GetItem(obj=Ident(name='things'),
+                                                                                            index=Number(value=2))))]))]))

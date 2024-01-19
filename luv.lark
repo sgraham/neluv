@@ -108,7 +108,7 @@ star_expr: "*" expr
 ?term: factor (_mul_op factor)*
 ?factor: _unary_op factor | power
 
-!_unary_op: "+"|"-"|"~"
+!_unary_op: "+"|"-"|"~"|"&"
 !_add_op: "+"|"-"
 !_shift_op: "<<"|">>"
 !_mul_op: "*"|"@"|"/"|"%"|"//"
@@ -159,12 +159,11 @@ key_value: test ":" test
 
 _exprlist: test_or_star_expr (","  test_or_star_expr)* [","]
 
-structdef: "struct" name":" struct_union_types
-uniondef: "union" name":" struct_union_types
+structdef: "struct" name ":" struct_union_types
+uniondef: "union" name ":" struct_union_types
 
-type_and_name: test name _NEWLINE
-struct_union_types: type_and_name
-                  | _NEWLINE _INDENT type_and_name+ _DEDENT
+struct_union_types: typed_var _NEWLINE
+                  | _NEWLINE _INDENT (typed_var _NEWLINE)+ _DEDENT
 
 arguments: argvalue ("," argvalue)*  ("," [ starargs | kwargs])?
          | starargs

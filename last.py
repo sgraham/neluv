@@ -127,6 +127,16 @@ class PackageReference:
   rhs: object
 
 @dataclass
+class GetItem:
+  obj: object
+  index: object
+
+@dataclass
+class Struct:
+  name: str
+  members: list[Type]
+
+@dataclass
 class ParseError:
   line: int
   column: int
