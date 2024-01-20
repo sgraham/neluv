@@ -1,0 +1,7 @@
+def int stuff():
+  int a = 4
+  int a = 6
+  return a
+---
+!
+test/type/local_redef_error.luv:3:3:redefinition of "a" in "stuff"

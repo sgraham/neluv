@@ -1,6 +1,6 @@
+import dataclasses
 import glob
 import importlib
-import os
 import pprint
 import sys
 
@@ -265,7 +265,7 @@ class CompilerContext:
 
 def add_meta(f, data, children, meta):
   ret = f(children)
-  if not meta.empty and isinstance(ret, last.Location):
+  if not meta.empty and isinstance(ret, last.AstNode):
     ret.line = meta.line
     ret.column = meta.column
   return ret
@@ -501,6 +501,33 @@ class Compiler:
       sys.exit(1)
     self.error_at = error_at or default_error_at
 
+  class FuncSymTabVisit:
+    def __init__(self, func, parent):
+      self.func = func
+      self.parent = parent
+
+    def visit_VarDecl(self, node):
+      x = self.func.symtab.get(node.name)
+      if x:
+        self.parent.error_at(node, 'redefinition of "%s" in "%s"' % (node.name, self.func.name))
+      self.func.symtab[node.name] = node
+
+  def build_func_symbol_table(self, func):
+    self.visit(self.FuncSymTabVisit(func, self), func)
+
+  def visit(self, visitor, node):
+    x = getattr(visitor, 'visit_' + node.__class__.__name__, None)
+    if x:
+      x(node)
+    for f in dataclasses.fields(node):
+      field = getattr(node, f.name)
+      if isinstance(field, last.AstNode):
+        self.visit(visitor, field)
+      elif isinstance(field, list):
+        for lx in field:
+          if isinstance(lx, last.AstNode):
+            self.visit(visitor, lx)
+
   def build_symbol_table(self, ast):
     assert isinstance(ast, last.TopLevel)
     for tl in ast.body.entries:
@@ -508,8 +535,10 @@ class Compiler:
           isinstance(tl, last.FuncDef) or
           isinstance(tl, last.VarDecl)):
         if self.globals.get(tl.name):
-          self.error_at(tl, 'redefinition of "%s"' % tl.name)
+          self.error_at(tl, 'redefinition at global scope of "%s"' % tl.name)
         self.globals[tl.name] = tl
+        if isinstance(tl, last.FuncDef):
+          self.build_func_symbol_table(tl)
       else:
         self.error_at(tl, 'syntax error %s' % tl)
 
@@ -538,7 +567,7 @@ def parse_tests(parser):
       print('OK: %s' % pt)
 
 def type_tests(parser):
-  err = {}
+  err = None
   def tt_error_at(node, msg):
     err['node'] = node
     err['msg'] = msg
@@ -548,11 +577,11 @@ def type_tests(parser):
     source, error = test_contents(tt)
     tree = parser.parse(source)
     ast = ToAst().transform(tree)
+    err = {}
     c = Compiler(tt, error_at=tt_error_at)
     c.build_symbol_table(ast)
     if error[:1] == '!':
-      got = '%s:%d:%d:%s' % (os.path.split(tt)[1],
-                             err['node'].line, err['node'].column, err['msg'])
+      got = '%s:%d:%d:%s' % (tt, err['node'].line, err['node'].column, err['msg'])
       expected = error.lstrip('!\n')
       if expected != got:
         print(tt)

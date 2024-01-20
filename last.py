@@ -1,67 +1,70 @@
 from dataclasses import dataclass
 
-class Location:
+class AstNode:
   line: int
   column: int
 
 @dataclass
-class Number(Location):
+class Number(AstNode):
   value: int
 
 @dataclass
-class String(Location):
+class String(AstNode):
   value: str
 
 @dataclass
-class Const(Location):
+class Const(AstNode):
   name: str
 
 @dataclass
-class FuncCall(Location):
-  func: object
-  args: list[object]
+class FuncCall(AstNode):
+  func: AstNode
+  args: list[AstNode]
 
 @dataclass
-class Ident(Location):
-  name: object
-
-@dataclass
-class Op(Location):
+class Ident(AstNode):
   name: str
 
 @dataclass
-class GetAttr(Location):
-  lhs: object
+class Op(AstNode):
+  name: str
+
+@dataclass
+class GetAttr(AstNode):
+  lhs: AstNode
   rhs: str
 
 @dataclass
-class Assign(Location):
-  lhs: object
-  rhs: object
+class Assign(AstNode):
+  lhs: AstNode
+  rhs: AstNode
 
 @dataclass
-class Block(Location):
-  entries: list[object]
+class Block(AstNode):
+  entries: list[AstNode]
 
 @dataclass
-class TopLevel(Location):
+class TopLevel(AstNode):
   body: Block
 
 @dataclass
-class FuncDef(Location):
-  rtype: object
+class FuncDef(AstNode):
+  rtype: AstNode
   name: str
-  params: list[object]
+  params: list[AstNode]
   body: Block
 
+  def __post_init__(self):
+    self.symtab = {}
+
 @dataclass
-class Type(Location):
-  base: object
+class Type(AstNode):
+  base: AstNode
 
 @dataclass
 class FuncType(Type):
-  rtype: object
-  params: list[object]
+  rtype: AstNode
+  params: list[AstNode]
 
 @dataclass
 class SliceDecl(Type):
@@ -69,96 +72,96 @@ class SliceDecl(Type):
 
 @dataclass
 class FixedArrayDecl(Type):
-  size: object
+  size: AstNode
 
 @dataclass
 class PointerDecl(Type):
   pass
 
 @dataclass
-class MacroCallWithBlock(Location):
+class MacroCallWithBlock(AstNode):
   func: FuncCall
   body: Block
 
 @dataclass
-class Return(Location):
-  value: object
+class Return(AstNode):
+  value: AstNode
 
 @dataclass
-class Pass(Location):
+class Pass(AstNode):
   pass
 
 @dataclass
-class For(Location):
-  it: object
-  collection: object
+class For(AstNode):
+  it: AstNode
+  collection: AstNode
   body: Block
   els: Block
 
 @dataclass
-class Elif(Location):
-  cond: object
+class Elif(AstNode):
+  cond: AstNode
   body: Block
 
 @dataclass
-class If(Location):
-  cond: object
+class If(AstNode):
+  cond: AstNode
   body: Block
   elifs: list[Elif]
   els: Block
 
 @dataclass
-class TypedVar(Location):
+class TypedVar(AstNode):
   type: Type
   name: str
 
 @dataclass
-class VarDecl(Location):
-  type: object
+class VarDecl(AstNode):
+  type: AstNode
   name: str
-  init: object
+  init: AstNode
 
 @dataclass
-class UnaryExpr(Location):
-  op: object
-  obj: object
+class UnaryExpr(AstNode):
+  op: AstNode
+  obj: AstNode
 
 @dataclass
-class BinaryExpr(Location):
-  lhs: object
-  rhs: object
-  op: object
+class BinaryExpr(AstNode):
+  lhs: AstNode
+  rhs: AstNode
+  op: AstNode
 
 @dataclass
-class CompExpr(Location):
+class CompExpr(AstNode):
   # 3 + 2n long:
   #   VAL0 cmp0 VAL1 [cmp1 VAL2 ...]
   # for x < y < z
   # === x < y and y < z, but y only eval once.
-  chain: list[object]
+  chain: list[AstNode]
 
 @dataclass
-class PackageReference(Location):
-  lhs: object
-  rhs: object
+class PackageReference(AstNode):
+  lhs: AstNode
+  rhs: AstNode
 
 @dataclass
-class GetItem(Location):
-  obj: object
-  index: object
+class GetItem(AstNode):
+  obj: AstNode
+  index: AstNode
 
 @dataclass
-class Struct(Location):
+class Struct(AstNode):
   name: str
   members: list[Type]
 
 @dataclass
-class Union(Location):
+class Union(AstNode):
   name: str
   members: list[Type]
 
 @dataclass
-class ParseError(Location):
+class ParseError:
   line: int
   column: int
-  got: object
+  got: AstNode
