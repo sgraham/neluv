@@ -1,57 +1,61 @@
 from dataclasses import dataclass
 
+class Location:
+  line: int
+  column: int
+
 @dataclass
-class Number:
+class Number(Location):
   value: int
 
 @dataclass
-class String:
+class String(Location):
   value: str
 
 @dataclass
-class Const:
+class Const(Location):
   name: str
 
 @dataclass
-class FuncCall:
+class FuncCall(Location):
   func: object
   args: list[object]
 
 @dataclass
-class Ident:
+class Ident(Location):
   name: object
 
 @dataclass
-class Op:
+class Op(Location):
   name: str
 
 @dataclass
-class GetAttr:
+class GetAttr(Location):
   lhs: object
   rhs: str
 
 @dataclass
-class Assign:
+class Assign(Location):
   lhs: object
   rhs: object
 
 @dataclass
-class Block:
+class Block(Location):
   entries: list[object]
 
 @dataclass
-class TopLevel:
+class TopLevel(Location):
   body: Block
 
 @dataclass
-class FuncDef:
+class FuncDef(Location):
   rtype: object
   name: str
   params: list[object]
   body: Block
 
 @dataclass
-class Type:
+class Type(Location):
   base: object
 
 @dataclass
@@ -72,61 +76,61 @@ class PointerDecl(Type):
   pass
 
 @dataclass
-class MacroCallWithBlock:
+class MacroCallWithBlock(Location):
   func: FuncCall
   body: Block
 
 @dataclass
-class Return:
+class Return(Location):
   value: object
 
 @dataclass
-class Pass:
+class Pass(Location):
   pass
 
 @dataclass
-class For:
+class For(Location):
   it: object
   collection: object
   body: Block
   els: Block
 
 @dataclass
-class Elif:
+class Elif(Location):
   cond: object
   body: Block
 
 @dataclass
-class If:
+class If(Location):
   cond: object
   body: Block
   elifs: list[Elif]
   els: Block
 
 @dataclass
-class TypedVar:
+class TypedVar(Location):
   type: Type
   name: str
 
 @dataclass
-class VarDecl:
+class VarDecl(Location):
   type: object
   name: str
   init: object
 
 @dataclass
-class UnaryExpr:
+class UnaryExpr(Location):
   op: object
   obj: object
 
 @dataclass
-class BinaryExpr:
+class BinaryExpr(Location):
   lhs: object
   rhs: object
   op: object
 
 @dataclass
-class CompExpr:
+class CompExpr(Location):
   # 3 + 2n long:
   #   VAL0 cmp0 VAL1 [cmp1 VAL2 ...]
   # for x < y < z
@@ -134,27 +138,27 @@ class CompExpr:
   chain: list[object]
 
 @dataclass
-class PackageReference:
+class PackageReference(Location):
   lhs: object
   rhs: object
 
 @dataclass
-class GetItem:
+class GetItem(Location):
   obj: object
   index: object
 
 @dataclass
-class Struct:
+class Struct(Location):
   name: str
   members: list[Type]
 
 @dataclass
-class Union:
+class Union(Location):
   name: str
   members: list[Type]
 
 @dataclass
-class ParseError:
+class ParseError(Location):
   line: int
   column: int
   got: object

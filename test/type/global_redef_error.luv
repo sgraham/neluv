@@ -1,0 +1,5 @@
+int a = 4
+float a
+---
+!
+global_redef_error.luv:2:1:redefinition of "a"

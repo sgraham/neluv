@@ -1,14 +1,13 @@
-import logging
-
 import glob
 import importlib
+import os
+import pprint
 import sys
 
 #from luv_lark import Lark_StandAlone, PythonIndenter, Tree, Transformer, v_args, UnexpectedToken, logger
-from lark import Lark, Tree, Transformer, v_args, UnexpectedToken, logger
+from lark import Lark, Tree, Transformer, v_args, UnexpectedToken, logger, Visitor
 from lark.indenter import PythonIndenter
 
-logger.setLevel(logging.DEBUG)
 import last
 
 this_module = sys.modules[__name__]
@@ -264,6 +263,14 @@ class CompilerContext:
     res += '}'
     return res
 
+def add_meta(f, data, children, meta):
+  ret = f(children)
+  if not meta.empty and isinstance(ret, last.Location):
+    ret.line = meta.line
+    ret.column = meta.column
+  return ret
+
+@v_args(wrapper=add_meta)
 class ToAst(Transformer):
   def DEC_NUMBER(self, n):
     #print('DEC_NUMBER', n, file=sys.stderr)
@@ -392,7 +399,7 @@ class ToAst(Transformer):
     return children
 
   def returntype(self, children):
-    #assert isinstance(children[0], last.Type)
+    assert children[0] is None or isinstance(children[0], last.Type)
     return children[0]
 
   def name(self, children):
@@ -470,6 +477,7 @@ class Parser:
                        parser='earley',
                        lexer='basic',
                        postlex=PythonIndenter(),
+                       propagate_positions=True,
                        #cache=True,
                        #debug=True,
                        strict=True)
@@ -480,16 +488,44 @@ class Parser:
     except UnexpectedToken as err:
       return Tree('error', children=[last.ParseError(err.line, err.column, err.token)])
 
+class Typer:
+  def __init__(self):
+    pass
+
+class Compiler:
+  def __init__(self, filename, error_at=None):
+    self.globals = {}
+    self.filename = filename
+    def default_error_at(node, msg):
+      print('%s:%d:%d:error: %s' % (self.filename, node.line, node.column, msg), file=sys.stderr)
+      sys.exit(1)
+    self.error_at = error_at or default_error_at
+
+  def build_symbol_table(self, ast):
+    assert isinstance(ast, last.TopLevel)
+    for tl in ast.body.entries:
+      if (isinstance(tl, last.TypedVar) or
+          isinstance(tl, last.FuncDef) or
+          isinstance(tl, last.VarDecl)):
+        if self.globals.get(tl.name):
+          self.error_at(tl, 'redefinition of "%s"' % tl.name)
+        self.globals[tl.name] = tl
+      else:
+        self.error_at(tl, 'syntax error %s' % tl)
+
+def test_contents(fn):
+  with open(fn, 'r') as f:
+    source, _, after = f.read().partition('\n---\n')
+  after = after.rstrip('\n')
+  return source + '\n', after
+
 def parse_tests(parser):
-  import pprint
   for pt in sorted(glob.glob('test/parse/**/*.luv', recursive=True)):
     pt = pt.replace('\\', '/')
-    with open(pt, 'r') as f:
-      source, _, expected = f.read().partition('---\n')
-    expected = expected.rstrip('\n')
+    source, expected = test_contents(pt)
     tree = parser.parse(source)
     #print(tree.pretty())
-    ast = ToAst(visit_tokens=True).transform(tree)
+    ast = ToAst().transform(tree)
     got = pprint.pformat(ast)
     if expected != got:
       print(pt)
@@ -501,6 +537,35 @@ def parse_tests(parser):
     else:
       print('OK: %s' % pt)
 
+def type_tests(parser):
+  err = {}
+  def tt_error_at(node, msg):
+    err['node'] = node
+    err['msg'] = msg
+
+  for tt in sorted(glob.glob('test/type/**/*.luv', recursive=True)):
+    tt = tt.replace('\\', '/')
+    source, error = test_contents(tt)
+    tree = parser.parse(source)
+    ast = ToAst().transform(tree)
+    c = Compiler(tt, error_at=tt_error_at)
+    c.build_symbol_table(ast)
+    if error[:1] == '!':
+      got = '%s:%d:%d:%s' % (os.path.split(tt)[1],
+                             err['node'].line, err['node'].column, err['msg'])
+      expected = error.lstrip('!\n')
+      if expected != got:
+        print(tt)
+        print('--- EXPECTED')
+        print("%s" % expected)
+        print('--- GOT')
+        print("%s" % got)
+        raise SystemExit(1)
+      else:
+        print('OK: %s' % tt)
+    else:
+      raise
+
 def main():
   parser = Parser()
 
@@ -509,13 +574,13 @@ def main():
 
   if len(sys.argv) == 2 and sys.argv[1] == 'test':
     parse_tests(parser)
+    type_tests(parser)
   else:
-    contents = open(sys.argv[1]).read()
-    source, _, backmatter = contents.partition('\n---\n')
+    source, _ = test_contents(sys.argv[1])
     tree = parser.parse(source + '\n')
     #print(tree.pretty(), file=sys.stderr)
 
-    ast = ToAst(visit_tokens=True).transform(tree)
+    ast = ToAst().transform(tree)
     import pprint
     pprint.pprint(ast, stream=sys.stderr)
 
