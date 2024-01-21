@@ -531,7 +531,7 @@ class Compiler:
             self.visit(visitor, lx)
 
   def build_symbol_table(self, ast):
-    assert isinstance(ast, last.TopLevel)
+    assert isinstance(ast, last.TopLevel), ast
     for tl in ast.body.entries:
       if (isinstance(tl, last.TypedVar) or
           isinstance(tl, last.FuncDef) or
@@ -545,7 +545,9 @@ class Compiler:
         self.error_at(tl, 'syntax error %s' % tl)
 
   def get_c_type(self, node):
-    print(node)
+    if node == _KEYWORDS['i32']:
+      return 'int32_t'
+    print('GET_C_TYPE', node)
     return '???'
 
   def get_safe_c_name(self, luv_name):
@@ -557,41 +559,69 @@ class Compiler:
       return self.get_safe_c_name(node.name)
     elif isinstance(node, last.Number):
       return str(node.value)  # TODO, safe-ize this, incl floats, etc.
-    else:
-      raise RuntimeError("unhandled node %s" % node)
-
-  def codegen(self, node):
-    result = ''
-    if isinstance(node, last.Block):
-      result += '{'
-      for x in node.entries:
-        result += self.codegen(x)
-        result += ';'
-      result += '}'
+    elif isinstance(node, last.CompExpr):
+      assert len(node.chain) == 3, "todo chained"
+      # TODO: passing op right through
+      return '(%s) %s (%s)' % (
+          self.expr(node.chain[0]), node.chain[1].name, self.expr(node.chain[2]))
     elif isinstance(node, last.FuncCall):
-      result += self.expr(node.func)
+      result = self.expr(node.func)
       result += '('
       result += ','.join(self.expr(x) for x in node.args)
       result += ')'
+      return result
     else:
-      raise RuntimeError("unhandled node %s" % node)
-    return result
+      raise RuntimeError("unhandled expr node %s" % node)
+
+  def stmt(self, node):
+    if isinstance(node, last.Block):
+      result = '{'
+      for x in node.entries:
+        result += self.stmt(x)
+      result += '}'
+      return result
+    elif isinstance(node, last.If):
+      result = 'if ('
+      result += self.expr(node.cond)
+      result += ')'
+      result += self.stmt(node.body)
+      for el in node.elifs:
+        result += 'else if ('
+        result += self.expr(el.cond)
+        result += ')'
+        result += self.stmt(el.body)
+      if node.els:
+        result += self.stmt(node.els)
+      return result
+    elif isinstance(node, last.Return):
+      result = 'return'
+      if node.value:
+        result += ' ' + self.expr(node.value) + ';'
+      return result
+    else:
+      return self.expr(node) + ';'
 
   def codegen_FuncDef(self, func):
     params = []
-    if not params: params = 'void'
+    for p in func.params:
+      params.append('%s %s' % (self.get_c_type(p.type), self.get_safe_c_name(p.name)))
+    if not params:
+      params = 'void'
+    else:
+      params = ','.join(params)
     fname = self.get_safe_c_name(func.name)
     if fname == 'main':
       rtype = 'int'
     else:
       rtype = self.get_c_type(func.rtype)
     result = '%s %s(%s)' % (rtype, fname, params)
-    result += self.codegen(func.body)
+    result += self.stmt(func.body)
     return result
 
   def compile(self, outfn):
     with open(outfn, 'w') as f:
       f.write(r'''
+#include <stdint.h>
 #include <stdio.h>
 static void printint(int x) {
   printf("%d\n", x);
@@ -611,6 +641,10 @@ def dyibicc(c_file):
   compiler_path = r'../dyibicc/out/wd/dyibicc.exe'
   proc = subprocess.run([compiler_path, c_file], capture_output=True, text=True)
   if proc.returncode != 0:
+    print('---STDOUT')
+    print(proc.stdout, file=sys.stderr)
+    print('---STDERR')
+    print(proc.stderr, file=sys.stderr)
     raise RuntimeError('compile failed')
   return proc.stdout.rstrip('\n')
 

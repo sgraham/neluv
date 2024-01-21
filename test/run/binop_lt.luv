@@ -1,0 +1,9 @@
+def int stuff(int a, int b):
+  if a < b:
+    return a
+  return b
+
+def main():
+  printint(stuff(13, 6))
+---
+6

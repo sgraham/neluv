@@ -1,0 +1,9 @@
+def int stuff(int a, int b):
+  if a == b:
+    return 44
+  return 11
+
+def main():
+  printint(stuff(13, 6))
+---
+11
