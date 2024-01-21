@@ -1,6 +1,7 @@
 import dataclasses
 import glob
 import importlib
+import os
 import pprint
 import sys
 
@@ -542,58 +543,91 @@ class Compiler:
       else:
         self.error_at(tl, 'syntax error %s' % tl)
 
+  def get_c_type(self, node):
+    print(node)
+    return '???'
+
+  def get_safe_c_name(self, luv_name):
+    # TODO
+    return luv_name
+
+  def codegen(self, node):
+    pass
+
+  def codegen_FuncDef(self, func):
+    params = []
+    if not params: params = 'void'
+    fname = self.get_safe_c_name(func.name)
+    if fname == 'main':
+      rtype = 'int'
+    else:
+      rtype = self.get_c_type(func.rtype)
+    result = 'static %s %s(%s) {' % (rtype, fname, params)
+    for x in func.body.entries:
+      self.codegen(x)
+    result += '}'
+    return result
+
+  def compile(self, outfn):
+    with open(outfn, 'w') as f:
+      f.write(r'''
+#include <stdio.h>
+static void printint(int x) {
+  printf("%d\n", x);
+}
+''')
+      for n,obj in self.globals.items():
+        if isinstance(obj, last.FuncDef):
+          f.write(self.codegen_FuncDef(obj))
+
 def test_contents(fn):
   with open(fn, 'r') as f:
     source, _, after = f.read().partition('\n---\n')
   after = after.rstrip('\n')
   return source + '\n', after
 
-def parse_tests(parser):
-  for pt in sorted(glob.glob('test/parse/**/*.luv', recursive=True)):
-    pt = pt.replace('\\', '/')
-    source, expected = test_contents(pt)
+def dyibicc(c_file):
+  pass
+
+def do_tests(parser, test_list):
+  if not test_list:
+    test_list = sorted(glob.glob('test/**/*.luv', recursive=True))
+
+  err = None
+  def tt_error_at(node, msg):
+    err['node'] = node
+    err['msg'] = msg
+
+  for t in test_list:
+    t = t.replace('\\', '/')
+    source, expected = test_contents(t)
     tree = parser.parse(source)
     #print(tree.pretty())
     ast = ToAst().transform(tree)
-    got = pprint.pformat(ast)
+    if t.startswith('test/parse'):
+      got = pprint.pformat(ast)
+    elif t.startswith('test/type'):
+      err = {}
+      c = Compiler(t, error_at=tt_error_at)
+      c.build_symbol_table(ast)
+      got = '%s:%d:%d:%s' % (t, err['node'].line, err['node'].column, err['msg'])
+      expected = error.lstrip('!\n')
+    elif t.startswith('test/run'):
+      c = Compiler(t)
+      c.build_symbol_table(ast)
+      c_file = os.path.splitext(t)[0] + '.c'
+      c.compile(c_file)
+      got = dyibicc(c_file)
+
     if expected != got:
-      print(pt)
+      print(t)
       print('--- EXPECTED')
       print("%s" % expected)
       print('--- GOT')
       print("%s" % got)
       raise SystemExit(1)
     else:
-      print('OK: %s' % pt)
-
-def type_tests(parser):
-  err = None
-  def tt_error_at(node, msg):
-    err['node'] = node
-    err['msg'] = msg
-
-  for tt in sorted(glob.glob('test/type/**/*.luv', recursive=True)):
-    tt = tt.replace('\\', '/')
-    source, error = test_contents(tt)
-    tree = parser.parse(source)
-    ast = ToAst().transform(tree)
-    err = {}
-    c = Compiler(tt, error_at=tt_error_at)
-    c.build_symbol_table(ast)
-    if error[:1] == '!':
-      got = '%s:%d:%d:%s' % (tt, err['node'].line, err['node'].column, err['msg'])
-      expected = error.lstrip('!\n')
-      if expected != got:
-        print(tt)
-        print('--- EXPECTED')
-        print("%s" % expected)
-        print('--- GOT')
-        print("%s" % got)
-        raise SystemExit(1)
-      else:
-        print('OK: %s' % tt)
-    else:
-      raise
+      print('OK: %s' % t)
 
 def main():
   parser = Parser()
@@ -601,9 +635,8 @@ def main():
   load_builtin_macros()
   #print(_MACROS)
 
-  if len(sys.argv) == 2 and sys.argv[1] == 'test':
-    parse_tests(parser)
-    type_tests(parser)
+  if len(sys.argv) >= 2 and sys.argv[1] == 'test':
+    do_tests(parser, sys.argv[2:])
   else:
     source, _ = test_contents(sys.argv[1])
     tree = parser.parse(source + '\n')

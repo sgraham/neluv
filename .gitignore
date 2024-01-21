@@ -3,3 +3,4 @@ compiler/
 venv/
 __pycache__
 .vscode/
+test/run/*.c
