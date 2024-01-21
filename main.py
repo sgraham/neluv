@@ -3,6 +3,7 @@ import glob
 import importlib
 import os
 import pprint
+import subprocess
 import sys
 
 #from luv_lark import Lark_StandAlone, PythonIndenter, Tree, Transformer, v_args, UnexpectedToken, logger
@@ -551,8 +552,30 @@ class Compiler:
     # TODO
     return luv_name
 
+  def expr(self, node):
+    if isinstance(node, last.Ident):
+      return self.get_safe_c_name(node.name)
+    elif isinstance(node, last.Number):
+      return str(node.value)  # TODO, safe-ize this, incl floats, etc.
+    else:
+      raise RuntimeError("unhandled node %s" % node)
+
   def codegen(self, node):
-    pass
+    result = ''
+    if isinstance(node, last.Block):
+      result += '{'
+      for x in node.entries:
+        result += self.codegen(x)
+        result += ';'
+      result += '}'
+    elif isinstance(node, last.FuncCall):
+      result += self.expr(node.func)
+      result += '('
+      result += ','.join(self.expr(x) for x in node.args)
+      result += ')'
+    else:
+      raise RuntimeError("unhandled node %s" % node)
+    return result
 
   def codegen_FuncDef(self, func):
     params = []
@@ -562,10 +585,8 @@ class Compiler:
       rtype = 'int'
     else:
       rtype = self.get_c_type(func.rtype)
-    result = 'static %s %s(%s) {' % (rtype, fname, params)
-    for x in func.body.entries:
-      self.codegen(x)
-    result += '}'
+    result = '%s %s(%s)' % (rtype, fname, params)
+    result += self.codegen(func.body)
     return result
 
   def compile(self, outfn):
@@ -587,7 +608,11 @@ def test_contents(fn):
   return source + '\n', after
 
 def dyibicc(c_file):
-  pass
+  compiler_path = r'../dyibicc/out/wd/dyibicc.exe'
+  proc = subprocess.run([compiler_path, c_file], capture_output=True, text=True)
+  if proc.returncode != 0:
+    raise RuntimeError('compile failed')
+  return proc.stdout.rstrip('\n')
 
 def do_tests(parser, test_list):
   if not test_list:
@@ -611,7 +636,7 @@ def do_tests(parser, test_list):
       c = Compiler(t, error_at=tt_error_at)
       c.build_symbol_table(ast)
       got = '%s:%d:%d:%s' % (t, err['node'].line, err['node'].column, err['msg'])
-      expected = error.lstrip('!\n')
+      expected = expected.lstrip('!\n')
     elif t.startswith('test/run'):
       c = Compiler(t)
       c.build_symbol_table(ast)
