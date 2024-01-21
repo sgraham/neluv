@@ -1,0 +1,16 @@
+def a():
+  return b()
+
+def b():
+  return c()
+
+def c():
+  def d():
+    def e():
+      return 3
+    return e
+  return d()()
+
+print(typeof(a()))
+---
+i32

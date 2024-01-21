@@ -141,130 +141,6 @@ def load_builtin_macros():
       raise RuntimeError('conflicting definition of builtin macro for %s' % x)
     _MACROS[x] = getattr(mod, x)
 
-class CompilerContext:
-  def type_(self, t):
-    return t.name
-
-  def param(self, p):
-    if isinstance(p, last.TypedParam):
-      return '%s %s' % (self.type_(p.type), p.name)
-    else:
-      assert False, "unhandled param %s" % p
-
-  def return_type_of_block(self, block):
-    for s in block.entries:
-      #if isinstance(s, last.Return):
-        #pass
-      pass
-    return _KEYWORDS['void']
-
-  def definition(self, d):
-    if isinstance(d, last.FuncDef):
-      # TODO: need stack of in-scope vars with types (upvals, globals, etc too)
-      return_type = self.return_type_of_block(d.body)
-      if d.type != _KEYWORDS['auto']:
-        if d.type != return_type:
-          raise TypeError('%s specified as returning "%s" but returns "%s"' % (
-            d.name, self.type_(d.type), self.type_(return_type)))
-      params = ','.join(self.param(p) for p in d.params)
-      if not params:
-        params = self.type_(_KEYWORDS['void'])
-      res = 'static %s %s(%s) {' % (self.type_(return_type), d.name, params)
-      res += self.block(d.body)
-      return res + '}'
-    else:
-      assert False, "unhandled definition %s" % d
-
-  def lval(self, v):
-    if isinstance(v, last.Ident):
-      return v.name
-    else:
-      assert False, "unhandled lval %s" % v
-
-  def expr(self, e):
-    if isinstance(e, last.Number):
-      return e.value
-    elif isinstance(e, last.Ident):
-      return e.name
-    elif isinstance(e, last.FuncCall):
-      # The parser distinguishes between func and macro if there's a : body, but
-      # otherwise they look identical, so check macros before emitting a normal
-      # runtime function call.
-      if isinstance(e.func, last.Ident) and _MACROS.get(e.func.name):
-        mac = _MACROS.get(e.func.name)
-        result = mac(self, e.args, None)  # None is body
-        return result
-      else:
-        funcval = self.expr(e.func)
-        return '%s(%s)' % (funcval, ','.join(self.expr(a) for a in e.args))
-    elif isinstance(e, last.MacroCallWithBlock):
-      assert isinstance(e.func, last.FuncCall)
-      if not isinstance(e.func.func, last.Ident):
-        raise TypeError('macro invocation "%s" expected to only be a name' % e.func.func)
-      mac = _MACROS.get(e.func.func.name)
-      if not mac:
-        raise TypeError('macro "%s" not found' % e.func.func.name)
-      return mac(self, e.func.args, e.body)
-    else:
-      assert False, "unhandled expr %s" % e
-
-  def stmt(self, s):
-    if isinstance(s, last.Assign):
-      return '%s = %s;' % (self.lval(s.lhs), self.expr(s.rhs))
-    else:
-      return self.expr(s) + ';'
-
-  def get_type(self, expr):
-    if isinstance(expr, last.Number):
-      return _KEYWORDS['int']
-    else:
-      assert False, "unhandled get_type %s" % expr
-
-  def find_local_decls(self, block):
-    assignments = {}
-    for s in block.entries:
-      if isinstance(s, last.Assign):
-        if isinstance(s.lhs, last.Ident):
-          rhs_type = self.get_type(s.rhs)
-          if not assignments.get(s.lhs.name, None):
-            assignments[s.lhs.name] = rhs_type
-          else:
-            prev_lhs_type = assignments[s.lhs.name]
-            if rhs_type != prev_lhs_type:
-              raise TypeError('%s was "%s", but now "%s"' % (
-                s.lhs.var.name, prev_lhs_type, rhs_type))
-    return assignments
-
-  def block(self, block):
-    res = ''
-    for n,t in self.find_local_decls(block).items():
-      typename = self.type_(t)
-      res += '%s %s = (%s){0};' % (typename, n, typename)
-    return res + '\n'.join(self.stmt(s) for s in block.entries)
-
-  def goes_in_main(self, x):
-    #return not (isinstance(x, last.FuncDef) or isinstance(x, last.PreProc))
-    return not (isinstance(x, last.FuncDef))
-
-  def codegen(self, toplevel):
-    res = ''
-
-    top, in_main = [], []
-    for x in toplevel.body.entries:
-      (in_main if self.goes_in_main(x) else top).append(x)
-    in_main = last.Block(in_main)
-
-    res = '#include <stdio.h>\n\n'
-
-    for t in top:
-      res += self.definition(t)
-
-    res += 'int main(void) {'
-
-    res += self.block(in_main)
-    res += '}'
-    return res
-
 def add_meta(f, data, children, meta):
   ret = f(children)
   if not meta.empty and isinstance(ret, last.AstNode):
@@ -544,6 +420,12 @@ class Compiler:
       else:
         self.error_at(tl, 'syntax error %s' % tl)
 
+  def infer_types(self, ast):
+    # push all FuncDefs with auto return on to queue
+    # pop, if auto, try to determine type
+    # return types
+    pass
+
   def get_c_type(self, node):
     if node == _KEYWORDS['i32']:
       return 'int32_t'
@@ -570,6 +452,9 @@ class Compiler:
       result += ','.join(self.expr(x) for x in node.args)
       result += ')'
       return result
+    elif isinstance(node, last.BinaryExpr):
+      # TODO: passing op right through
+      return '(%s) %s (%s)' % (self.expr(node.lhs), node.op.name, self.expr(node.rhs))
     else:
       raise RuntimeError("unhandled expr node %s" % node)
 
@@ -598,6 +483,13 @@ class Compiler:
       if node.value:
         result += ' ' + self.expr(node.value) + ';'
       return result
+    elif isinstance(node, last.Assign):
+      return '%s = %s;' % (self.expr(node.lhs), self.expr(node.rhs))
+    elif isinstance(node, last.VarDecl):
+      if node.init:
+        return '%s = %s;' % (self.get_safe_c_name(node.name), self.expr(node.init))
+      else:
+        return ''
     else:
       return self.expr(node) + ';'
 
@@ -614,8 +506,13 @@ class Compiler:
       rtype = 'int'
     else:
       rtype = self.get_c_type(func.rtype)
-    result = '%s %s(%s)' % (rtype, fname, params)
+    result = '%s %s(%s){' % (rtype, fname, params)
+    for n,loc in func.symtab.items():
+      result += '%(type)s %(name)s = (%(type)s){0};' % {
+          'type': self.get_c_type(loc.type),
+          'name': self.get_safe_c_name(loc.name)}
     result += self.stmt(func.body)
+    result += '}'
     return result
 
   def compile(self, outfn):
@@ -652,12 +549,17 @@ def do_tests(parser, test_list):
   if not test_list:
     test_list = sorted(glob.glob('test/**/*.luv', recursive=True))
 
+  disabled_list = []
+  passed_list = []
   err = None
   def tt_error_at(node, msg):
     err['node'] = node
     err['msg'] = msg
 
   for t in test_list:
+    if '.disabled.' in t:
+      disabled_list.append(t)
+      continue
     t = t.replace('\\', '/')
     source, expected = test_contents(t)
     tree = parser.parse(source)
@@ -669,11 +571,13 @@ def do_tests(parser, test_list):
       err = {}
       c = Compiler(t, error_at=tt_error_at)
       c.build_symbol_table(ast)
+      c.infer_types(ast)
       got = '%s:%d:%d:%s' % (t, err['node'].line, err['node'].column, err['msg'])
       expected = expected.lstrip('!\n')
     elif t.startswith('test/run'):
       c = Compiler(t)
       c.build_symbol_table(ast)
+      c.infer_types(ast)
       c_file = os.path.splitext(t)[0] + '.c'
       c.compile(c_file)
       got = dyibicc(c_file)
@@ -686,7 +590,13 @@ def do_tests(parser, test_list):
       print("%s" % got)
       raise SystemExit(1)
     else:
-      print('OK: %s' % t)
+      passed_list.append(t)
+      sys.stdout.write('.')
+      sys.stdout.flush()
+
+  print()
+  print('%d tests OK' % len(passed_list))
+  print('%d tests disabled' % len(disabled_list))
 
 def main():
   parser = Parser()
@@ -704,9 +614,6 @@ def main():
     ast = ToAst().transform(tree)
     import pprint
     pprint.pprint(ast, stream=sys.stderr)
-
-    #cctx = CompilerContext()
-    #print(cctx.codegen(ast))
 
     '''
     class MacroContext:

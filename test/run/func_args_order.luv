@@ -1,0 +1,7 @@
+def int func(int a, int b, int c):
+  return a
+
+def main():
+  printint(func(14, 15, 16))
+---
+14
