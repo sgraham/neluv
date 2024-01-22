@@ -587,6 +587,12 @@ static void printint(int x) {
       for n,obj in self.globals.items():
         if isinstance(obj, last.FuncDef):
           f.write(self.codegen_FuncDef(obj))
+        elif isinstance(obj, last.VarDecl):
+          f.write('%(type)s %(name)s;' % {
+                'type': self.get_c_type(obj.type),
+                'name': self.get_safe_c_name(obj.name)})
+        else:
+          assert False, "unhandled global %s" % obj
 
 def test_contents(fn):
   with open(fn, 'r') as f:
@@ -677,6 +683,9 @@ def main():
     ast = ToAst().transform(tree)
     import pprint
     pprint.pprint(ast, stream=sys.stderr)
+    c = Compiler(sys.argv[1], ast)
+    c_file = os.path.splitext(sys.argv[1])[0] + '.c'
+    c.compile(c_file)
 
     '''
     class MacroContext:

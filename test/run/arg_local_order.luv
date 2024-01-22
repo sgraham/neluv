@@ -1,0 +1,12 @@
+def int wee(int a, int b, int c, int d):
+  int u = 1
+  int v = 2
+  int w = 3
+  int x = 4
+  int y = 5
+  return v + x + b + d
+
+def main():
+  printint(wee(6, 7, 8, 9))
+---
+22
