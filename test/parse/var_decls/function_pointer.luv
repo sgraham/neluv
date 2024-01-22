@@ -1,7 +1,8 @@
 def void(int, float) my_fp
 ---
-TopLevel(body=Block(entries=[TypedVar(type=FuncType(base=None,
-                                                    rtype=Type(base='void'),
-                                                    params=[Type(base='i32'),
-                                                            Type(base='f32')]),
-                                      name='my_fp')]))
+TopLevel(body=Block(entries=[VarDecl(type=FuncType(base=None,
+                                                   rtype=Type(base='void'),
+                                                   params=[Type(base='i32'),
+                                                           Type(base='f32')]),
+                                     name='my_fp',
+                                     init=None)]))

@@ -2,7 +2,9 @@ int x
 def func(int x):
   print(x)
 ---
-TopLevel(body=Block(entries=[TypedVar(type=Type(base='i32'), name='x'),
+TopLevel(body=Block(entries=[VarDecl(type=Type(base='i32'),
+                                     name='x',
+                                     init=None),
                              FuncDef(rtype=Type(base='auto'),
                                      name='func',
                                      params=[TypedVar(type=Type(base='i32'),

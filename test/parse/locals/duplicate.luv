@@ -6,7 +6,9 @@ def f():
 TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
                                      name='f',
                                      params=[],
-                                     body=Block(entries=[TypedVar(type=Type(base='i32'),
-                                                                  name='x'),
-                                                         TypedVar(type=Type(base='i32'),
-                                                                  name='x')]))]))
+                                     body=Block(entries=[VarDecl(type=Type(base='i32'),
+                                                                 name='x',
+                                                                 init=None),
+                                                         VarDecl(type=Type(base='i32'),
+                                                                 name='x',
+                                                                 init=None)]))]))

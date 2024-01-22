@@ -3,11 +3,16 @@ int just_int
 [256]int fixed_size
 []*int array_of_ptrs_to_ints
 ---
-TopLevel(body=Block(entries=[TypedVar(type=Type(base='i32'), name='just_int'),
-                             TypedVar(type=SliceDecl(base=Type(base='i32')),
-                                      name='unsized_arr'),
-                             TypedVar(type=FixedArrayDecl(base=Type(base='i32'),
-                                                          size=Number(value=256)),
-                                      name='fixed_size'),
-                             TypedVar(type=SliceDecl(base=PointerDecl(base=Type(base='i32'))),
-                                      name='array_of_ptrs_to_ints')]))
+TopLevel(body=Block(entries=[VarDecl(type=Type(base='i32'),
+                                     name='just_int',
+                                     init=None),
+                             VarDecl(type=SliceDecl(base=Type(base='i32')),
+                                     name='unsized_arr',
+                                     init=None),
+                             VarDecl(type=FixedArrayDecl(base=Type(base='i32'),
+                                                         size=Number(value=256)),
+                                     name='fixed_size',
+                                     init=None),
+                             VarDecl(type=SliceDecl(base=PointerDecl(base=Type(base='i32'))),
+                                     name='array_of_ptrs_to_ints',
+                                     init=None)]))

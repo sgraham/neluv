@@ -237,7 +237,7 @@ class ToAst(Transformer):
   def var_decl_init(self, children):
     if len(children) == 1:
       assert isinstance(children[0], last.TypedVar)
-      return children[0]
+      return last.VarDecl(children[0].type, children[0].name, None)
     else:
       return last.VarDecl(children[0].type, children[0].name, children[1])
 
@@ -409,8 +409,7 @@ class Compiler:
   def build_symbol_table(self, ast):
     assert isinstance(ast, last.TopLevel), ast
     for tl in ast.body.entries:
-      if (isinstance(tl, last.TypedVar) or
-          isinstance(tl, last.FuncDef) or
+      if (isinstance(tl, last.FuncDef) or
           isinstance(tl, last.VarDecl)):
         if self.globals.get(tl.name):
           self.error_at(tl, 'redefinition at global scope of "%s"' % tl.name)
@@ -583,6 +582,7 @@ def do_tests(parser, test_list):
       got = dyibicc(c_file)
 
     if expected != got:
+      print()
       print(t)
       print('--- EXPECTED')
       print("%s" % expected)
@@ -609,7 +609,7 @@ def main():
   else:
     source, _ = test_contents(sys.argv[1])
     tree = parser.parse(source + '\n')
-    #print(tree.pretty(), file=sys.stderr)
+    print(tree.pretty(), file=sys.stderr)
 
     ast = ToAst().transform(tree)
     import pprint

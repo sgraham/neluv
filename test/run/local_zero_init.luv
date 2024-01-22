@@ -1,0 +1,8 @@
+def int stuff(int a):
+  int x
+  return x
+
+def main():
+  printint(stuff(3))
+---
+0

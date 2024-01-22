@@ -9,5 +9,6 @@ TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
                                      params=[],
                                      body=Block(entries=[Assign(lhs=Ident(name='x'),
                                                                 rhs=Number(value=5)),
-                                                         TypedVar(type=Type(base='i32'),
-                                                                  name='x')]))]))
+                                                         VarDecl(type=Type(base='i32'),
+                                                                 name='x',
+                                                                 init=None)]))]))
