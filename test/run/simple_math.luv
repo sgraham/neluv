@@ -1,0 +1,4 @@
+def main():
+  printint(3 + 4 * 5)
+---
+23

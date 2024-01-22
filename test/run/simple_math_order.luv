@@ -1,0 +1,4 @@
+def main():
+  printint(10 - 4)
+---
+6
