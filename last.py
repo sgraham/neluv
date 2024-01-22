@@ -54,6 +54,7 @@ class Type(AstNode):
 @dataclass
 class FuncSymTabEntry:  # Not AstNode, sy
   type: Type
+  ref_node: AstNode  # For error reporting
   is_func_param: bool = False
   is_declared_local: bool = False
   is_in_env: bool = False

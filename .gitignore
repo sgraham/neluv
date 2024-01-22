@@ -4,3 +4,4 @@ venv/
 __pycache__
 .vscode/
 test/run/*.c
+test/type/*.c

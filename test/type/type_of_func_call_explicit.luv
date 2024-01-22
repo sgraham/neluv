@@ -1,0 +1,8 @@
+def void stuff():
+  pass
+
+def main():
+  x = stuff()
+---
+!
+test/type/type_of_func_call_explicit.luv:5:3:can't declare local of type "void"

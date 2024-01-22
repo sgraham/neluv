@@ -393,19 +393,19 @@ class Compiler:
       self.parent = parent
       for p in func.params:
         assert isinstance(p, last.TypedVar)
-        func.symtab[p.name] = last.FuncSymTabEntry(p.type, is_func_param=True)
+        func.symtab[p.name] = last.FuncSymTabEntry(p.type, p, is_func_param=True)
 
     def visit_VarDecl(self, node):
       x = self.func.symtab.get(node.name)
       if x:
         self.parent.error_at(node, 'redefinition of "%s" in "%s"' % (node.name, self.func.name))
-      self.func.symtab[node.name] = last.FuncSymTabEntry(node.type, is_declared_local=True)
+      self.func.symtab[node.name] = last.FuncSymTabEntry(node.type, node, is_declared_local=True)
 
     def visit_Assign(self, node):
       if isinstance(node.lhs, last.Ident):  # TODO: Is this sufficient?
         if not self.func.symtab.get(node.lhs.name):
           self.func.symtab[node.lhs.name] = last.FuncSymTabEntry(
-              self.parent.expr_type(node.rhs), is_declared_local=True)
+              self.parent.expr_type(node.rhs), node, is_declared_local=True)
 
   def build_func_symbol_table(self, func):
     self.visit(self.FuncSymTabVisit(func, self), func)
@@ -534,6 +534,8 @@ class Compiler:
       return 'int32_t'
     if node == _KEYWORDS['void']:
       return 'void'
+    if node == _KEYWORDS['f32']:
+      return 'float'
     print('GET_C_TYPE', node)
     return '???'
 
@@ -630,6 +632,8 @@ class Compiler:
     result += '{'
     for n, fste in func.symtab.items():
       if fste.is_declared_local:
+        if fste.type is _KEYWORDS['void']:
+          self.error_at(fste.ref_node, 'can\'t declare local of type "%s"' % fste.type.base)
         result += '%(type)s %(name)s = (%(type)s){0};' % {
             'type': self.get_c_type(fste.type), 'name': self.get_safe_c_name(n)}
     result += self.stmt(func.body)
@@ -658,6 +662,9 @@ static void printint(int x) {
  */''')
       for n,obj in self.globals.items():
         if isinstance(obj, last.VarDecl):
+          #TODO
+          #if obj.type is _KEYWORDS['void']:
+          #  self.error_at(obj, 'can\'t declare global of type "%s"' % obj.type.base)
           f.write('%(type)s %(name)s' % {
                 'type': self.get_c_type(obj.type),
                 'name': self.get_safe_c_name(obj.name)})
@@ -690,9 +697,9 @@ def dyibicc(c_file):
   compiler_path = r'../dyibicc/out/wd/dyibicc.exe'
   proc = subprocess.run([compiler_path, c_file], capture_output=True, text=True)
   if proc.returncode != 0:
-    print('---STDOUT')
+    print('---STDOUT', file=sys.stderr)
     print(proc.stdout, file=sys.stderr)
-    print('---STDERR')
+    print('---STDERR', file=sys.stderr)
     print(proc.stderr, file=sys.stderr)
     raise RuntimeError('compile failed')
   return proc.stdout.rstrip('\n')
@@ -723,6 +730,8 @@ def do_tests(parser, test_list, update):
     elif t.startswith('test/type'):
       err = {}
       c = Compiler(t, ast, error_at=tt_error_at)
+      c_file = os.path.splitext(t)[0] + '.c'
+      c.compile(c_file)
       got = '!\n%s:%d:%d:%s' % (t, err['node'].line, err['node'].column, err['msg'])
     elif t.startswith('test/run'):
       c = Compiler(t, ast)
@@ -776,6 +785,7 @@ def main():
     c = Compiler(sys.argv[1], ast)
     c_file = os.path.splitext(sys.argv[1])[0] + '.c'
     c.compile(c_file)
+    dyibicc(c_file)
 
     '''
     class MacroContext:
