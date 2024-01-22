@@ -29,4 +29,6 @@ TopLevel(body=Block(entries=[VarDecl(type=Type(base='i32'),
                                                                                      FuncCall(func=Ident(name='print'),
                                                                                               args=[Ident(name='y')]),
                                                                                      FuncCall(func=Ident(name='print'),
-                                                                                              args=[Ident(name='z')])]))]))]))
+                                                                                              args=[Ident(name='z')])]),
+                                                                 hidden=False)]),
+                                     hidden=False)]))

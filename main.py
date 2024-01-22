@@ -383,7 +383,8 @@ class Compiler:
     self.error_at = error_at or default_error_at
 
     self.ast_root = ast_root
-    self.build_symbol_table()
+    self.hoist_nested_functions()
+    self.find_globals()
     self.infer_types()
 
   class FuncSymTabVisit:
@@ -404,24 +405,23 @@ class Compiler:
     x = getattr(visitor, 'visit_' + node.__class__.__name__, None)
     if x:
       x(node)
+
+    if do_not_cross_types:
+      for dnct in do_not_cross_types:
+        if isinstance(node, dnct):
+          return
+
     for f in dataclasses.fields(node):
       field = getattr(node, f.name)
 
-      skip = False
-      if do_not_cross_types:
-        for dnct in do_not_cross_types:
-          if isinstance(field, dnct):
-            skip = True
-      if skip: continue
-
       if isinstance(field, last.AstNode):
-        self.visit(visitor, field)
+        self.visit(visitor, field, do_not_cross_types)
       elif isinstance(field, list):
         for lx in field:
           if isinstance(lx, last.AstNode):
-            self.visit(visitor, lx)
+            self.visit(visitor, lx, do_not_cross_types)
 
-  def build_symbol_table(self):
+  def find_globals(self):
     assert isinstance(self.ast_root, last.TopLevel), self.ast_root
     for tl in self.ast_root.body.entries:
       if (isinstance(tl, last.FuncDef) or
@@ -434,13 +434,26 @@ class Compiler:
       else:
         self.error_at(tl, 'syntax error %s' % tl)
 
-  def find_func_defs(self, start):
+  def find_func_defs(self, start, top_level_only=False):
     class FindFuncDef:
       def __init__(self): self.result = []
       def visit_FuncDef(self, node): self.result.append(node)
     finder = FindFuncDef()
-    self.visit(finder, start)
+    self.visit(finder, start, do_not_cross_types=[last.FuncDef] if top_level_only else None)
     return finder.result
+
+  def hoist_nested_functions(self):
+    func_defs = self.find_func_defs(self.ast_root, top_level_only=True)
+    add_to_toplevel = []
+    while func_defs:
+      cur_func = func_defs.pop()
+      nested_funcs = self.find_func_defs(cur_func.body, top_level_only=True)
+      for nested in nested_funcs:
+        cur_func.body.entries.remove(nested)  # TODO: prob unnecessary O(n)
+        add_to_toplevel.append(nested)
+        func_defs.append(nested)
+    assert isinstance(self.ast_root, last.TopLevel)
+    self.ast_root.body.entries = add_to_toplevel + self.ast_root.body.entries
 
   def find_return_stmts(self, func):
     class FindReturns:
@@ -455,6 +468,8 @@ class Compiler:
       return _KEYWORDS['void']
     elif isinstance(expr, last.Number):
       return _KEYWORDS['i32']  # XXX all number types
+    elif isinstance(expr, last.FuncCall):
+      return expr.func.rtype  # oh no
     assert False, "unhandled expr_type %s" % expr
 
   def determine_auto_return_types(self):
@@ -462,7 +477,7 @@ class Compiler:
     for fd in func_defs:
       if fd.rtype is _KEYWORDS['auto']:
         return_type = None
-        returns = self.find_return_stmts(fd)
+        returns = self.find_return_stmts(fd.body)
         for r in returns:
           this_type = self.expr_type(r.value)
           if return_type is None:
@@ -550,6 +565,8 @@ class Compiler:
         return '%s = %s;' % (self.get_safe_c_name(node.name), self.expr(node.init))
       else:
         return ''
+    elif isinstance(node, last.FuncDef):
+      return '/* HOISTED %s */;' % node.name
     else:
       return self.expr(node) + ';'
 
@@ -593,6 +610,7 @@ static void printint(int x) {
                 'name': self.get_safe_c_name(obj.name)})
         else:
           assert False, "unhandled global %s" % obj
+    subprocess.run(['clang-format', '-i', outfn, '-style=Chromium'])
 
 def test_contents(fn):
   with open(fn, 'r') as f:
@@ -601,7 +619,7 @@ def test_contents(fn):
   return source + '\n', after
 
 def dyibicc(c_file):
-  clang_path = 'clang-cl'
+  clang_path = 'clang'
   proc = subprocess.run([clang_path, '-c', '-fsyntax-only', c_file])
   if proc.returncode != 0:
     raise RuntimeError('clang compile failed')
@@ -616,7 +634,7 @@ def dyibicc(c_file):
     raise RuntimeError('compile failed')
   return proc.stdout.rstrip('\n')
 
-def do_tests(parser, test_list):
+def do_tests(parser, test_list, update):
   if not test_list:
     test_list = sorted(glob.glob('test/**/*.luv', recursive=True))
 
@@ -642,26 +660,32 @@ def do_tests(parser, test_list):
     elif t.startswith('test/type'):
       err = {}
       c = Compiler(t, ast, error_at=tt_error_at)
-      got = '%s:%d:%d:%s' % (t, err['node'].line, err['node'].column, err['msg'])
-      expected = expected.lstrip('!\n')
+      got = '!\n%s:%d:%d:%s' % (t, err['node'].line, err['node'].column, err['msg'])
     elif t.startswith('test/run'):
       c = Compiler(t, ast)
       c_file = os.path.splitext(t)[0] + '.c'
       c.compile(c_file)
       got = dyibicc(c_file)
 
-    if expected != got:
-      print()
-      print(t)
-      print('--- EXPECTED')
-      print("%s" % expected)
-      print('--- GOT')
-      print("%s" % got)
-      raise SystemExit(1)
+    if update:
+      with open(t, "w", newline='\n') as f:
+        f.write(source)
+        f.write('---\n')
+        f.write(got)
+        f.write('\n')
     else:
-      passed_list.append(t)
-      sys.stdout.write('.')
-      sys.stdout.flush()
+      if expected != got:
+        print()
+        print(t)
+        print('--- EXPECTED')
+        print("%s" % expected)
+        print('--- GOT')
+        print("%s" % got)
+        raise SystemExit(1)
+      else:
+        passed_list.append(t)
+        sys.stdout.write('.')
+        sys.stdout.flush()
 
   print()
   print('%d tests OK' % len(passed_list))
@@ -674,7 +698,9 @@ def main():
   #print(_MACROS)
 
   if len(sys.argv) >= 2 and sys.argv[1] == 'test':
-    do_tests(parser, sys.argv[2:])
+    do_tests(parser, sys.argv[2:], update=False)
+  elif len(sys.argv) >= 2 and sys.argv[1] == 'test_update':
+    do_tests(parser, sys.argv[2:], update=True)
   else:
     source, _ = test_contents(sys.argv[1])
     tree = parser.parse(source + '\n')

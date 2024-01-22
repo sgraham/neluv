@@ -13,4 +13,5 @@ TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
                                                                  name='p',
                                                                  init=UnaryExpr(op=Op(name='&'),
                                                                                 obj=GetItem(obj=Ident(name='things'),
-                                                                                            index=Number(value=2))))]))]))
+                                                                                            index=Number(value=2))))]),
+                                     hidden=False)]))

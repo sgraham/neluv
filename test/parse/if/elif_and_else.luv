@@ -13,4 +13,5 @@ TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
                                                             body=Block(entries=[Pass()]),
                                                             elifs=[Elif(cond=Const(name='false'),
                                                                         body=Block(entries=[Pass()]))],
-                                                            els=Block(entries=[Pass()]))]))]))
+                                                            els=Block(entries=[Pass()]))]),
+                                     hidden=False)]))

@@ -53,6 +53,9 @@ class FuncDef(AstNode):
   name: str
   params: list[AstNode]
   body: Block
+  # True when hoisted out of another function, and so shouldn't be visible in
+  # the namespace to which it was moved.
+  hidden: bool = False
 
   def __post_init__(self):
     self.symtab = {}

@@ -6,4 +6,5 @@ TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
                                      params=[],
                                      body=Block(entries=[FuncCall(func=GetItem(obj=Ident(name='a'),
                                                                                index=Number(value=4)),
-                                                                  args=[String(value='wee')])]))]))
+                                                                  args=[String(value='wee')])]),
+                                     hidden=False)]))

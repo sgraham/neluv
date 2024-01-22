@@ -9,4 +9,5 @@ TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
                                                              collection=Const(name='true'),
                                                              body=Block(entries=[FuncCall(func=Ident(name='print'),
                                                                                           args=[String(value='hi')])]),
-                                                             els=None)]))]))
+                                                             els=None)]),
+                                     hidden=False)]))

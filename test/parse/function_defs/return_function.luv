@@ -8,4 +8,5 @@ TopLevel(body=Block(entries=[FuncDef(rtype=FuncType(base=None,
                                      name='Func',
                                      params=[TypedVar(type=Type(base='bool'),
                                                       name='z')],
-                                     body=Block(entries=[Return(value=Const(name='null'))]))]))
+                                     body=Block(entries=[Return(value=Const(name='null'))]),
+                                     hidden=False)]))

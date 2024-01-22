@@ -9,4 +9,5 @@ TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
                                                                                 Op(name='+'),
                                                                                 Expr(chain=[Number(value=2),
                                                                                             Op(name='*'),
-                                                                                            Number(value=3)])]))]))]))
+                                                                                            Number(value=3)])]))]),
+                                     hidden=False)]))

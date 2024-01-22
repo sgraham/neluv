@@ -6,4 +6,5 @@ TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='i32'),
                                      params=[],
                                      body=Block(entries=[VarDecl(type=PointerDecl(base=Type(base='i32')),
                                                                  name='p',
-                                                                 init=None)]))]))
+                                                                 init=None)]),
+                                     hidden=False)]))

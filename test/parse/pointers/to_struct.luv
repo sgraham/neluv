@@ -15,4 +15,5 @@ TopLevel(body=Block(entries=[Struct(name='Thing',
                                                                  name='p',
                                                                  init=None),
                                                          Return(value=GetAttr(lhs=Ident(name='p'),
-                                                                              rhs='x'))]))]))
+                                                                              rhs='x'))]),
+                                     hidden=False)]))

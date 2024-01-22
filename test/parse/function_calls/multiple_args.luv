@@ -6,4 +6,5 @@ TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
                                      params=[],
                                      body=Block(entries=[FuncCall(func=Ident(name='fopen'),
                                                                   args=[String(value='a.txt'),
-                                                                        String(value='r')])]))]))
+                                                                        String(value='r')])]),
+                                     hidden=False)]))

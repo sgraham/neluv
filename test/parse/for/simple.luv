@@ -8,4 +8,5 @@ TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
                                      body=Block(entries=[For(it=Ident(name='i'),
                                                              collection=Number(value=3),
                                                              body=Block(entries=[Pass()]),
-                                                             els=None)]))]))
+                                                             els=None)]),
+                                     hidden=False)]))

@@ -7,4 +7,5 @@ TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
                                      body=Block(entries=[Assign(lhs=GetAttr(lhs=GetAttr(lhs=Ident(name='a'),
                                                                                         rhs='b'),
                                                                             rhs='c'),
-                                                                rhs=Number(value=4))]))]))
+                                                                rhs=Number(value=4))]),
+                                     hidden=False)]))

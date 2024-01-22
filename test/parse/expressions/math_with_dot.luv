@@ -8,4 +8,5 @@ TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
                                                                 rhs=Expr(chain=[Number(value=3),
                                                                                 Op(name='*'),
                                                                                 GetAttr(lhs=Ident(name='a'),
-                                                                                        rhs='b')]))]))]))
+                                                                                        rhs='b')]))]),
+                                     hidden=False)]))

@@ -9,4 +9,5 @@ TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
                                                                                 Op(name='*'),
                                                                                 UnaryExpr(op=Op(name='-'),
                                                                                           obj=FuncCall(func=Ident(name='f'),
-                                                                                                       args=[]))]))]))]))
+                                                                                                       args=[]))]))]),
+                                     hidden=False)]))

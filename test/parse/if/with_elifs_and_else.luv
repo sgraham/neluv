@@ -21,4 +21,5 @@ TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
                                                                         body=Block(entries=[FuncCall(func=Ident(name='print'),
                                                                                                      args=[Number(value=3)])]))],
                                                             els=Block(entries=[FuncCall(func=Ident(name='print'),
-                                                                                        args=[Number(value=4)])]))]))]))
+                                                                                        args=[Number(value=4)])]))]),
+                                     hidden=False)]))

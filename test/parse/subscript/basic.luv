@@ -5,4 +5,5 @@ TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
                                      name='f',
                                      params=[],
                                      body=Block(entries=[GetItem(obj=Ident(name='a'),
-                                                                 index=Number(value=4))]))]))
+                                                                 index=Number(value=4))]),
+                                     hidden=False)]))

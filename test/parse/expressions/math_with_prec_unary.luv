@@ -16,4 +16,5 @@ TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
                                                                                 Expr(chain=[Number(value=4),
                                                                                             Op(name='*'),
                                                                                             UnaryExpr(op=Op(name='-'),
-                                                                                                      obj=Number(value=5))])]))]))]))
+                                                                                                      obj=Number(value=5))])]))]),
+                                     hidden=False)]))

@@ -11,4 +11,5 @@ TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
                                                                                     Op(name='<'),
                                                                                     Number(value=4),
                                                                                     Op(name='=='),
-                                                                                    Ident(name='b')]))]))]))
+                                                                                    Ident(name='b')]))]),
+                                     hidden=False)]))

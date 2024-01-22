@@ -7,4 +7,5 @@ TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='f64'),
                                                       name='x'),
                                              TypedVar(type=Type(base='i32'),
                                                       name='y')],
-                                     body=Block(entries=[Pass()]))]))
+                                     body=Block(entries=[Pass()]),
+                                     hidden=False)]))

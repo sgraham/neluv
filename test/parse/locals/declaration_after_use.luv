@@ -11,4 +11,5 @@ TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
                                                                 rhs=Number(value=5)),
                                                          VarDecl(type=Type(base='i32'),
                                                                  name='x',
-                                                                 init=None)]))]))
+                                                                 init=None)]),
+                                     hidden=False)]))

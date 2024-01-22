@@ -9,6 +9,8 @@ TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='i32'),
                                      body=Block(entries=[FuncDef(rtype=Type(base='i32'),
                                                                  name='things',
                                                                  params=[],
-                                                                 body=Block(entries=[Return(value=Number(value=4))])),
+                                                                 body=Block(entries=[Return(value=Number(value=4))]),
+                                                                 hidden=False),
                                                          Return(value=FuncCall(func=Ident(name='things'),
-                                                                               args=[]))]))]))
+                                                                               args=[]))]),
+                                     hidden=False)]))

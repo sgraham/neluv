@@ -1,0 +1,13 @@
+def main():
+  x = 12
+  def stuff():
+    nonlocal x
+    x = 4
+    return x
+  printint(x)
+  printint(stuff())
+  printint(x)
+---
+12
+4
+4

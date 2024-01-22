@@ -5,4 +5,5 @@ TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='i32'),
                                      name='func',
                                      params=[TypedVar(type=Type(base='bool'),
                                                       name='x')],
-                                     body=Block(entries=[Pass()]))]))
+                                     body=Block(entries=[Pass()]),
+                                     hidden=False)]))

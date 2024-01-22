@@ -17,4 +17,5 @@ TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='i32'),
                                                                                                         Op(name='+'),
                                                                                                         Ident(name='i')]))]),
                                                              els=None),
-                                                         Return(value=Ident(name='x'))]))]))
+                                                         Return(value=Ident(name='x'))]),
+                                     hidden=False)]))
