@@ -1,0 +1,8 @@
+def stuff():
+  return
+
+def main():
+  stuff()
+  printint(22)
+---
+22

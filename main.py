@@ -371,13 +371,17 @@ class Typer:
     pass
 
 class Compiler:
-  def __init__(self, filename, error_at=None):
+  def __init__(self, filename, ast_root, error_at=None):
     self.globals = {}
     self.filename = filename
     def default_error_at(node, msg):
       print('%s:%d:%d:error: %s' % (self.filename, node.line, node.column, msg), file=sys.stderr)
       sys.exit(1)
     self.error_at = error_at or default_error_at
+
+    self.ast_root = ast_root
+    self.build_symbol_table()
+    self.infer_types()
 
   class FuncSymTabVisit:
     def __init__(self, func, parent):
@@ -393,12 +397,20 @@ class Compiler:
   def build_func_symbol_table(self, func):
     self.visit(self.FuncSymTabVisit(func, self), func)
 
-  def visit(self, visitor, node):
+  def visit(self, visitor, node, do_not_cross_types=None):
     x = getattr(visitor, 'visit_' + node.__class__.__name__, None)
     if x:
       x(node)
     for f in dataclasses.fields(node):
       field = getattr(node, f.name)
+
+      skip = False
+      if do_not_cross_types:
+        for dnct in do_not_cross_types:
+          if isinstance(field, dnct):
+            skip = True
+      if skip: continue
+
       if isinstance(field, last.AstNode):
         self.visit(visitor, field)
       elif isinstance(field, list):
@@ -406,9 +418,9 @@ class Compiler:
           if isinstance(lx, last.AstNode):
             self.visit(visitor, lx)
 
-  def build_symbol_table(self, ast):
-    assert isinstance(ast, last.TopLevel), ast
-    for tl in ast.body.entries:
+  def build_symbol_table(self):
+    assert isinstance(self.ast_root, last.TopLevel), self.ast_root
+    for tl in self.ast_root.body.entries:
       if (isinstance(tl, last.FuncDef) or
           isinstance(tl, last.VarDecl)):
         if self.globals.get(tl.name):
@@ -419,15 +431,51 @@ class Compiler:
       else:
         self.error_at(tl, 'syntax error %s' % tl)
 
-  def infer_types(self, ast):
-    # push all FuncDefs with auto return on to queue
-    # pop, if auto, try to determine type
-    # return types
-    pass
+  def find_func_defs(self, start):
+    class FindFuncDef:
+      def __init__(self): self.result = []
+      def visit_FuncDef(self, node): self.result.append(node)
+    finder = FindFuncDef()
+    self.visit(finder, start)
+    return finder.result
+
+  def find_return_stmts(self, func):
+    class FindReturns:
+      def __init__(self): self.result = []
+      def visit_Return(self, node): self.result.append(node)
+    finder = FindReturns()
+    self.visit(finder, func, do_not_cross_types=[last.FuncDef])
+    return finder.result
+
+  def expr_type(self, expr):
+    if expr is None:
+      return _KEYWORDS['void']
+    elif isinstance(expr, last.Number):
+      return _KEYWORDS['i32']  # XXX all number types
+    assert False, "unhandled expr_type %s" % expr
+
+  def determine_auto_return_types(self):
+    func_defs = self.find_func_defs(self.ast_root)
+    for fd in func_defs:
+      if fd.rtype is _KEYWORDS['auto']:
+        return_type = None
+        returns = self.find_return_stmts(fd)
+        for r in returns:
+          this_type = self.expr_type(r.value)
+          if return_type is None:
+            return_type = this_type
+          elif return_type != this_type:
+            self.error_at(r, 'returning "%s", previously "%s"' % (this_type, return_type))
+        fd.rtype = return_type or _KEYWORDS['void']
+
+  def infer_types(self):
+    self.determine_auto_return_types()
 
   def get_c_type(self, node):
     if node == _KEYWORDS['i32']:
       return 'int32_t'
+    if node == _KEYWORDS['void']:
+      return 'void'
     print('GET_C_TYPE', node)
     return '???'
 
@@ -480,8 +528,11 @@ class Compiler:
     elif isinstance(node, last.Return):
       result = 'return'
       if node.value:
-        result += ' ' + self.expr(node.value) + ';'
+        result += ' ' + self.expr(node.value)
+      result += ';'
       return result
+    elif isinstance(node, last.Pass):
+      return ';'
     elif isinstance(node, last.Assign):
       return '%s = %s;' % (self.expr(node.lhs), self.expr(node.rhs))
     elif isinstance(node, last.VarDecl):
@@ -534,6 +585,11 @@ def test_contents(fn):
   return source + '\n', after
 
 def dyibicc(c_file):
+  clang_path = 'clang-cl'
+  proc = subprocess.run([clang_path, '-c', '-fsyntax-only', c_file])
+  if proc.returncode != 0:
+    raise RuntimeError('clang compile failed')
+
   compiler_path = r'../dyibicc/out/wd/dyibicc.exe'
   proc = subprocess.run([compiler_path, c_file], capture_output=True, text=True)
   if proc.returncode != 0:
@@ -568,15 +624,11 @@ def do_tests(parser, test_list):
       got = pprint.pformat(ast)
     elif t.startswith('test/type'):
       err = {}
-      c = Compiler(t, error_at=tt_error_at)
-      c.build_symbol_table(ast)
-      c.infer_types(ast)
+      c = Compiler(t, ast, error_at=tt_error_at)
       got = '%s:%d:%d:%s' % (t, err['node'].line, err['node'].column, err['msg'])
       expected = expected.lstrip('!\n')
     elif t.startswith('test/run'):
-      c = Compiler(t)
-      c.build_symbol_table(ast)
-      c.infer_types(ast)
+      c = Compiler(t, ast)
       c_file = os.path.splitext(t)[0] + '.c'
       c.compile(c_file)
       got = dyibicc(c_file)

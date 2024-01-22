@@ -1,0 +1,9 @@
+def stuff():
+  def unused():
+    return 33
+
+def main():
+  stuff()
+  printint(44)
+---
+44
