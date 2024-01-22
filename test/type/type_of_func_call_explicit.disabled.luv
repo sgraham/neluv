@@ -1,0 +1,7 @@
+def void stuff():
+  pass
+
+def main():
+  x = stuff()
+---
+!

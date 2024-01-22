@@ -48,6 +48,18 @@ class TopLevel(AstNode):
   body: Block
 
 @dataclass
+class Type(AstNode):
+  base: AstNode
+
+@dataclass
+class FuncSymTabEntry:  # Not AstNode, sy
+  type: Type
+  is_func_param: bool = False
+  is_declared_local: bool = False
+  is_in_env: bool = False
+  is_global: bool = False
+
+@dataclass
 class FuncDef(AstNode):
   rtype: AstNode
   name: str
@@ -58,11 +70,7 @@ class FuncDef(AstNode):
   hidden: bool = False
 
   def __post_init__(self):
-    self.symtab = {}
-
-@dataclass
-class Type(AstNode):
-  base: AstNode
+    self.symtab = {}  # values are FuncSymTabEntry
 
 @dataclass
 class FuncType(Type):

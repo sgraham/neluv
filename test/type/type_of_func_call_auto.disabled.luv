@@ -1,0 +1,7 @@
+def stuff():
+  pass
+
+def main():
+  x = stuff()
+---
+!

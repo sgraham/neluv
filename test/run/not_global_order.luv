@@ -1,0 +1,12 @@
+def sub():
+  x = 65
+  printint(x)
+
+def main():
+  sub()
+  printint(x)
+
+int x = 8
+---
+65
+8

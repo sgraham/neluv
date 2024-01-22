@@ -1,6 +1,0 @@
-int x
-def main():
-  x = 59
-  printint(x)
----
-59

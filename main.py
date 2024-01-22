@@ -391,12 +391,21 @@ class Compiler:
     def __init__(self, func, parent):
       self.func = func
       self.parent = parent
+      for p in func.params:
+        assert isinstance(p, last.TypedVar)
+        func.symtab[p.name] = last.FuncSymTabEntry(p.type, is_func_param=True)
 
     def visit_VarDecl(self, node):
       x = self.func.symtab.get(node.name)
       if x:
         self.parent.error_at(node, 'redefinition of "%s" in "%s"' % (node.name, self.func.name))
-      self.func.symtab[node.name] = node
+      self.func.symtab[node.name] = last.FuncSymTabEntry(node.type, is_declared_local=True)
+
+    def visit_Assign(self, node):
+      if isinstance(node.lhs, last.Ident):  # TODO: Is this sufficient?
+        if not self.func.symtab.get(node.lhs.name):
+          self.func.symtab[node.lhs.name] = last.FuncSymTabEntry(
+              self.parent.expr_type(node.rhs), is_declared_local=True)
 
   def build_func_symbol_table(self, func):
     self.visit(self.FuncSymTabVisit(func, self), func)
@@ -442,6 +451,13 @@ class Compiler:
     self.visit(finder, start, do_not_cross_types=[last.FuncDef] if top_level_only else None)
     return finder.result
 
+  def replace_ident_references(self, start, old, new):
+    class ReplaceIdents:
+      def visit_Ident(self, v):
+        if v.name == old:
+          v.name = new
+    self.visit(ReplaceIdents(), start)
+
   def hoist_nested_functions(self):
     func_defs = self.find_func_defs(self.ast_root, top_level_only=True)
     add_to_toplevel = []
@@ -449,9 +465,13 @@ class Compiler:
       cur_func = func_defs.pop()
       nested_funcs = self.find_func_defs(cur_func.body, top_level_only=True)
       for nested in nested_funcs:
+        old_name = nested.name
+        new_name = old_name + '__hoisted_from_%s' % cur_func.name
+        nested.name = new_name
         cur_func.body.entries.remove(nested)  # TODO: prob unnecessary O(n)
         add_to_toplevel.append(nested)
         func_defs.append(nested)
+        self.replace_ident_references(cur_func.body, old_name, new_name)
     assert isinstance(self.ast_root, last.TopLevel)
     self.ast_root.body.entries = add_to_toplevel + self.ast_root.body.entries
 
@@ -469,25 +489,45 @@ class Compiler:
     elif isinstance(expr, last.Number):
       return _KEYWORDS['i32']  # XXX all number types
     elif isinstance(expr, last.FuncCall):
-      return expr.func.rtype  # oh no
+      if isinstance(expr.func, last.Ident):
+        f_in_globals = self.globals.get(expr.func.name)
+        if isinstance(f_in_globals, last.FuncDef):
+          if f_in_globals.rtype is _KEYWORDS['auto']:
+            self.get_function_return_type(f_in_globals)
+          return f_in_globals.rtype
+    elif isinstance(expr, last.Ident):
+      # params
+      # locals
+      # env(?)
+      # globals
+      pass
+    elif isinstance(expr, last.Expr):
+      if (expr.chain[1].name in ('+', '*', '-', '/') and
+          self.expr_type(expr.chain[0]) is _KEYWORDS['i32'] and
+          self.expr_type(expr.chain[2]) is _KEYWORDS['i32']):
+        # HACK HACK HACK
+        return _KEYWORDS['i32']
     assert False, "unhandled expr_type %s" % expr
 
-  def determine_auto_return_types(self):
+  def get_function_return_type(self, fd):
+    return_type = None
+    returns = self.find_return_stmts(fd.body)
+    for r in returns:
+      this_type = self.expr_type(r.value)
+      if return_type is None:
+        return_type = this_type
+      elif return_type != this_type:
+        self.error_at(r, 'returning "%s", previously "%s"' % (this_type, return_type))
+    fd.rtype = return_type or _KEYWORDS['void']
+
+  def determine_all_auto_function_returns(self):
     func_defs = self.find_func_defs(self.ast_root)
     for fd in func_defs:
       if fd.rtype is _KEYWORDS['auto']:
-        return_type = None
-        returns = self.find_return_stmts(fd.body)
-        for r in returns:
-          this_type = self.expr_type(r.value)
-          if return_type is None:
-            return_type = this_type
-          elif return_type != this_type:
-            self.error_at(r, 'returning "%s", previously "%s"' % (this_type, return_type))
-        fd.rtype = return_type or _KEYWORDS['void']
+        self.get_function_return_type(fd)
 
   def infer_types(self):
-    self.determine_auto_return_types()
+    self.determine_all_auto_function_returns()
 
   def get_c_type(self, node):
     if node == _KEYWORDS['i32']:
@@ -570,7 +610,7 @@ class Compiler:
     else:
       return self.expr(node) + ';'
 
-  def codegen_FuncDef(self, func):
+  def function_forward_declaration(self, func):
     params = []
     for p in func.params:
       params.append('%s %s' % (self.get_c_type(p.type), self.get_safe_c_name(p.name)))
@@ -583,33 +623,56 @@ class Compiler:
       rtype = 'int'
     else:
       rtype = self.get_c_type(func.rtype)
-    result = '%s %s(%s){' % (rtype, fname, params)
-    for n,loc in func.symtab.items():
-      result += '%(type)s %(name)s = (%(type)s){0};' % {
-          'type': self.get_c_type(loc.type),
-          'name': self.get_safe_c_name(loc.name)}
+    return '%s %s(%s)' % (rtype, fname, params)
+
+  def function_definition(self, func):
+    result = self.function_forward_declaration(func)
+    result += '{'
+    for n, fste in func.symtab.items():
+      if fste.is_declared_local:
+        result += '%(type)s %(name)s = (%(type)s){0};' % {
+            'type': self.get_c_type(fste.type), 'name': self.get_safe_c_name(n)}
     result += self.stmt(func.body)
     result += '}'
     return result
 
   def compile(self, outfn):
     with open(outfn, 'w') as f:
-      f.write(r'''
-#include <stdint.h>
+      f.write(r'''#include <stdint.h>
 #include <stdio.h>
 static void printint(int x) {
   printf("%d\n", x);
 }
-''')
+
+/*
+ * FORWARD DECLARATIONS
+ */''')
       for n,obj in self.globals.items():
         if isinstance(obj, last.FuncDef):
-          f.write(self.codegen_FuncDef(obj))
-        elif isinstance(obj, last.VarDecl):
-          f.write('%(type)s %(name)s;' % {
+          f.write(self.function_forward_declaration(obj))
+          f.write(';\n')
+
+      f.write(r'''
+/*
+ * GLOBALS
+ */''')
+      for n,obj in self.globals.items():
+        if isinstance(obj, last.VarDecl):
+          f.write('%(type)s %(name)s' % {
                 'type': self.get_c_type(obj.type),
                 'name': self.get_safe_c_name(obj.name)})
-        else:
-          assert False, "unhandled global %s" % obj
+          if obj.init:
+            f.write(' = %s' % self.expr(obj.init))
+          f.write(';\n')
+
+      f.write(r'''
+/*
+ * FUNCTIONS
+ */''')
+      for n,obj in self.globals.items():
+        if isinstance(obj, last.FuncDef):
+          f.write(self.function_definition(obj))
+
     subprocess.run(['clang-format', '-i', outfn, '-style=Chromium'])
 
 def test_contents(fn):
@@ -664,6 +727,7 @@ def do_tests(parser, test_list, update):
     elif t.startswith('test/run'):
       c = Compiler(t, ast)
       c_file = os.path.splitext(t)[0] + '.c'
+      #print(c_file)
       c.compile(c_file)
       got = dyibicc(c_file)
 
