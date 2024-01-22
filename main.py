@@ -201,16 +201,19 @@ class ToAst(Transformer):
     return last.GetAttr(children[0], children[1])
 
   def arith_expr(self, children):
-    return last.BinaryExpr(children[0], children[2], children[1])
+    assert (len(children) - 3) % 2 == 0
+    return last.Expr(children)
 
   def term(self, children):
-    return last.BinaryExpr(children[0], children[2], children[1])
+    assert (len(children) - 3) % 2 == 0
+    return last.Expr(children)
 
   def factor(self, children):
     if len(children) == 2:
       return last.UnaryExpr(children[0], children[1])
     else:
-      return last.BinaryExpr(children[0], children[2], children[1])
+      assert (len(children) - 3) % 2 == 0
+      return last.Expr(children)
 
   def comparison(self, children):
     assert (len(children) - 3) % 2 == 0
@@ -499,9 +502,16 @@ class Compiler:
       result += ','.join(self.expr(x) for x in node.args)
       result += ')'
       return result
-    elif isinstance(node, last.BinaryExpr):
-      # TODO: passing op right through
-      return '(%s) %s (%s)' % (self.expr(node.lhs), node.op.name, self.expr(node.rhs))
+    elif isinstance(node, last.Expr):
+      result = ''
+      for i,x in enumerate(node.chain):
+        # Expr op Expr op Expr op ...
+        if i % 2 == 0:
+          result += '(%s)' % self.expr(x)
+        else:
+          # TODO: passing op right through
+          result += x.name
+      return result
     else:
       raise RuntimeError("unhandled expr node %s" % node)
 
@@ -620,6 +630,7 @@ def do_tests(parser, test_list):
     tree = parser.parse(source)
     #print(tree.pretty())
     ast = ToAst().transform(tree)
+    #pprint.pprint(ast)
     if t.startswith('test/parse'):
       got = pprint.pformat(ast)
     elif t.startswith('test/type'):

@@ -5,8 +5,8 @@ TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
                                      name='f',
                                      params=[],
                                      body=Block(entries=[Assign(lhs=Ident(name='x'),
-                                                                rhs=BinaryExpr(lhs=Number(value=2),
-                                                                               rhs=UnaryExpr(op=Op(name='-'),
-                                                                                             obj=FuncCall(func=Ident(name='f'),
-                                                                                                          args=[])),
-                                                                               op=Op(name='*')))]))]))
+                                                                rhs=Expr(chain=[Number(value=2),
+                                                                                Op(name='*'),
+                                                                                UnaryExpr(op=Op(name='-'),
+                                                                                          obj=FuncCall(func=Ident(name='f'),
+                                                                                                       args=[]))]))]))]))

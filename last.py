@@ -127,10 +127,10 @@ class UnaryExpr(AstNode):
   obj: AstNode
 
 @dataclass
-class BinaryExpr(AstNode):
-  lhs: AstNode
-  rhs: AstNode
-  op: AstNode
+class Expr(AstNode):
+  # 3 + 2n long:
+  #   VAL0 op0 VAL1 [op1 VAL2 ...]
+  chain: list[AstNode]
 
 @dataclass
 class CompExpr(AstNode):

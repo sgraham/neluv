@@ -1,0 +1,9 @@
+def int stuff(int x):
+  if x == 0:
+    return 99
+  return stuff(x - 1)
+
+def main():
+  printint(stuff(5))
+---
+99

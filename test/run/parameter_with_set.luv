@@ -1,0 +1,8 @@
+def int stuff(int c):
+  c = c * 2
+  return c
+
+def main():
+  printint(stuff(3))
+---
+6

@@ -6,6 +6,6 @@ TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
                                      params=[],
                                      body=Block(entries=[VarDecl(type=Type(base='i32'),
                                                                  name='x',
-                                                                 init=BinaryExpr(lhs=Number(value=1),
-                                                                                 rhs=Number(value=2),
-                                                                                 op=Op(name='+')))]))]))
+                                                                 init=Expr(chain=[Number(value=1),
+                                                                                  Op(name='+'),
+                                                                                  Number(value=2)]))]))]))
