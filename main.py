@@ -412,7 +412,7 @@ class Compiler:
 
   def build_function_symtabs(self):
     for f in self.find_func_defs(self.ast_root):
-      self.visit(self.FuncSymTabVisit(f, self), f)
+      self.visit(self.FuncSymTabVisit(f, self), f.body, do_not_cross_types=[last.FuncDef])
 
   def visit(self, visitor, node, do_not_cross_types=None):
     x = getattr(visitor, 'visit_' + node.__class__.__name__, None)
@@ -481,8 +481,14 @@ class Compiler:
       def __init__(self): self.idents = []
       def visit_Ident(self, v): self.idents.append(v)
     finder = FindIdents()
-    self.visit(finder, func.body, do_not_cross_types=[last.FuncDef])
+    # We do have to decend into sub-functions here (i.e. not just the strict
+    # body of this function) because if a further nested function refers to
+    # something above this function, we need to request it from the parent.
+    self.visit(finder, func.body)
 
+    # Find all the identifiers referenced in this function that refer to a
+    # parent scope. Add entries to this function's symtab (marking them as
+    # upval) and also return them.
     to_bind = {}
     for i in finder.idents:
       for f in reversed(lexical_func_stack):
@@ -509,7 +515,7 @@ class Compiler:
           cur = self.cur_func_stack[-1]
           # Give the hoisted function a unique-ish name.
           old_name = nested.name
-          new_name = old_name + '$in_%s' % cur.name
+          new_name = old_name + '$%s' % cur.name
           nested.name = new_name
 
           to_bind = self.parent.find_upvals(nested, self.cur_func_stack + [nested])
@@ -517,7 +523,7 @@ class Compiler:
             uvb = last.UpvalBindings(to_bind, new_name)
             cur.upval_bindings[new_name] = uvb
             nested.params.insert(0,
-                last.TypedVar(last.PointerDecl(last.Type(uvb.struct_name)), '__up'))
+                last.TypedVar(last.PointerDecl(last.Type(uvb.struct_name)), '$up'))
 
           # Remove the declaration from the body of the current function,
           # replacing calls to it.
@@ -614,7 +620,7 @@ class Compiler:
     if isinstance(node, last.Ident):
       fste = self.current_function.symtab.get(node.name) if self.current_function else None
       if fste and fste.is_upval:
-        return '*__up->%s' % self.get_safe_c_name(node.name)
+        return '*$up->%s' % self.get_safe_c_name(node.name)
       else:
         return self.get_safe_c_name(node.name)
     elif isinstance(node, last.Number):
@@ -721,12 +727,18 @@ class Compiler:
           self.error_at(fste.ref_node, 'can\'t declare local of type "%s"' % fste.type.base)
         result += '%(type)s %(name)s = (%(type)s){0};' % {
             'type': self.get_c_type(fste.type), 'name': self.get_safe_c_name(n)}
-      if fste.is_upval:
-        result += '/* upval %s */\n' % n
     for n, upval in func.upval_bindings.items():
       result += '%s %s = {' % (upval.struct_name, upval.parent_binding_name)
       for name, uv in upval.to_bind.items():
-        result += '&(%s),' % name
+        in_cur_func = func.symtab[name]
+        # If the source of this variable is already an upval (i.e. we're in the
+        # "middle" function whose child references the variable, but it's
+        # declared in our parent, then we need to pass it on from our upvals,
+        # otherwise, refer to our local copy.
+        if in_cur_func.is_upval:
+          result += '$up->%s,' % name
+        else:
+          result += '&%s,' % name
       result += '};'
     result += self.stmt(func.body)
     result += '}'
@@ -744,7 +756,7 @@ class Compiler:
     return result
 
   def compile(self, outfn):
-    with open(outfn, 'w') as f:
+    with open(outfn, 'w', newline='\n') as f:
       f.write(r'''#include <stdint.h>
 #include <stdio.h>
 static void printint(int x) {
