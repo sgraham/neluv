@@ -1,0 +1,15 @@
+// Can't emit this naively as C because the call to stuff won't be constant.
+// Could:
+// - evaluate in compiler, sort of like running stuff() as a macro
+// - disallow this, just like C does
+// - inject the call to stuff at the top of main() or otherwise do something
+// similarly C++y, but then there's order sorting complexity, etc.
+def stuff():
+  return 123
+
+def main():
+  printint(x)
+
+x = stuff()
+---
+123
