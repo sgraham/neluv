@@ -3,6 +3,9 @@ from dataclasses import dataclass
 class AstNode:
   line: int
   column: int
+  def copy_meta(self, source):
+    self.line = source.line
+    self.column = source.column
 
 @dataclass
 class Number(AstNode):

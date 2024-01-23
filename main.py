@@ -432,16 +432,35 @@ class Compiler:
 
   def find_globals(self):
     assert isinstance(self.ast_root, last.TopLevel), self.ast_root
+
+    def insert_global_or_error(node):
+      name = node.name
+      if self.globals.get(name):
+        self.error_at(node, 'redefinition at global scope of "%s"' % name)
+      self.globals[name] = node
+
     for tl in self.ast_root.body.entries:
       if (isinstance(tl, last.FuncDef) or
           isinstance(tl, last.VarDecl)):
-        if self.globals.get(tl.name):
-          self.error_at(tl, 'redefinition at global scope of "%s"' % tl.name)
-        self.globals[tl.name] = tl
-        if isinstance(tl, last.FuncDef):
-          self.build_func_symbol_table(tl)
+        insert_global_or_error(tl)
+      elif isinstance(tl, last.Assign) and isinstance(tl.lhs, last.Ident):
+        # Handled below.
+        pass
       else:
         self.error_at(tl, 'syntax error %s' % tl)
+
+    for i, tl in enumerate(self.ast_root.body.entries):
+      if isinstance(tl, last.Assign) and isinstance(tl.lhs, last.Ident):
+        # Turn simple Assign into VarDecl at global scope
+        x = last.VarDecl(self.expr_type(tl.rhs), tl.lhs.name, tl.rhs)
+        x.copy_meta(tl)
+        self.ast_root.body.entries[i] = x
+        insert_global_or_error(x)
+
+    for n,g in self.globals.items():
+      if isinstance(g, last.FuncDef):
+        self.build_func_symbol_table(g)
+
 
   def find_func_defs(self, start, top_level_only=False):
     class FindFuncDef:
@@ -662,9 +681,8 @@ static void printint(int x) {
  */''')
       for n,obj in self.globals.items():
         if isinstance(obj, last.VarDecl):
-          #TODO
-          #if obj.type is _KEYWORDS['void']:
-          #  self.error_at(obj, 'can\'t declare global of type "%s"' % obj.type.base)
+          if obj.type is _KEYWORDS['void']:
+            self.error_at(obj, 'can\'t declare global of type "%s"' % obj.type.base)
           f.write('%(type)s %(name)s' % {
                 'type': self.get_c_type(obj.type),
                 'name': self.get_safe_c_name(obj.name)})

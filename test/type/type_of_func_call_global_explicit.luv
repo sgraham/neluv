@@ -1,0 +1,10 @@
+def void stuff():
+  pass
+
+def main():
+  pass
+
+x = stuff()
+---
+!
+test/type/type_of_func_call_global_explicit.luv:7:1:can't declare global of type "void"
