@@ -483,7 +483,7 @@ class Compiler:
     finder = FindIdents()
     self.visit(finder, func.body, do_not_cross_types=[last.FuncDef])
 
-    to_bind = []
+    to_bind = {}
     for i in finder.idents:
       for f in reversed(lexical_func_stack):
         if in_upper := f.symtab.get(i.name):
@@ -491,7 +491,9 @@ class Compiler:
             #print('upval req for %s of %s, found in %s' % (i.name, func.name, f.name))
             fste = last.FuncSymTabEntry(in_upper.type, in_upper.ref_node, is_upval=True)
             func.symtab[i.name] = fste
-            to_bind.append((i.name, fste))
+            to_bind[i.name] = fste
+          else:
+            break
     return to_bind
 
   class Hoister:
@@ -507,10 +509,10 @@ class Compiler:
           cur = self.cur_func_stack[-1]
           # Give the hoisted function a unique-ish name.
           old_name = nested.name
-          new_name = old_name + '__hoisted_from_%s' % cur.name
+          new_name = old_name + '$in_%s' % cur.name
           nested.name = new_name
 
-          to_bind = self.parent.find_upvals(nested, self.cur_func_stack)
+          to_bind = self.parent.find_upvals(nested, self.cur_func_stack + [nested])
           if to_bind:
             uvb = last.UpvalBindings(to_bind, new_name)
             cur.upval_bindings[new_name] = uvb
@@ -610,7 +612,7 @@ class Compiler:
 
   def expr(self, node):
     if isinstance(node, last.Ident):
-      fste = self.current_function.symtab.get(node.name)
+      fste = self.current_function.symtab.get(node.name) if self.current_function else None
       if fste and fste.is_upval:
         return '*__up->%s' % self.get_safe_c_name(node.name)
       else:
@@ -627,12 +629,13 @@ class Compiler:
       result += '('
 
       upvals = []
-      if isinstance(node.func, last.Ident):
-        # TODO: this is obviously suck
-        has_uv = self.current_function.upval_bindings.get(node.func.name)
-        if has_uv:
-          # TODO: double hacky, sneaky & here.
-          upvals.append(last.Ident('&' + has_uv.parent_binding_name))
+      if self.current_function:
+        if isinstance(node.func, last.Ident):
+          # TODO: this is obviously suck
+          has_uv = self.current_function.upval_bindings.get(node.func.name)
+          if has_uv:
+            # TODO: double hacky, sneaky & here.
+            upvals.append(last.Ident('&' + has_uv.parent_binding_name))
 
       result += ','.join(self.expr(x) for x in (upvals + node.args))
       result += ')'
@@ -722,7 +725,7 @@ class Compiler:
         result += '/* upval %s */\n' % n
     for n, upval in func.upval_bindings.items():
       result += '%s %s = {' % (upval.struct_name, upval.parent_binding_name)
-      for name, uv in upval.to_bind:
+      for name, uv in upval.to_bind.items():
         result += '&(%s),' % name
       result += '};'
     result += self.stmt(func.body)
@@ -735,7 +738,7 @@ class Compiler:
     #pprint.pprint(obj)
     for n, uvb in obj.upval_bindings.items():
       result += 'typedef struct {'
-      for name, uv in uvb.to_bind:
+      for name, uv in uvb.to_bind.items():
         result += '%s* %s;' % (self.get_c_type(uv.type), self.get_safe_c_name(name))
       result += '} %s;\n' % uvb.struct_name
     return result
@@ -808,6 +811,7 @@ def dyibicc(c_file):
     '-Wno-unused-but-set-variable',
     '-Wno-unused-parameter',
     '-Wno-unused-variable',
+    '-Wno-unused-function',
     c_file])
   if proc.returncode != 0:
     raise RuntimeError('clang compile failed')
@@ -834,6 +838,7 @@ def do_tests(parser, test_list, update):
     err['msg'] = msg
 
   for t in test_list:
+    #print(t)
     if '.disabled.' in t:
       disabled_list.append(t)
       continue

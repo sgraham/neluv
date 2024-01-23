@@ -66,10 +66,10 @@ class FuncSymTabEntry:  # Not AstNode
 upval_binding_counter = 0
 class UpvalBindings:  # Not AstNode
   def __init__(self, to_bind, func_name):
-    self.to_bind = to_bind  # list of fste's to bind
-    self.struct_name = '__upvals__' + func_name
+    self.to_bind = to_bind  # map of ident to fste's to bind
+    self.struct_name = '$Upvals_' + func_name
     global upval_binding_counter
-    self.parent_binding_name = '__uv_' + str(upval_binding_counter)
+    self.parent_binding_name = '$uv' + str(upval_binding_counter)
     upval_binding_counter += 1
 
 @dataclass
