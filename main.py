@@ -383,9 +383,12 @@ class Compiler:
     self.error_at = error_at or default_error_at
 
     self.ast_root = ast_root
-    self.hoist_nested_functions()
     self.find_globals()
+    self.build_function_symtabs()
+    self.hoist_nested_functions()
     self.infer_types()
+
+    self.current_function = None
 
   class FuncSymTabVisit:
     def __init__(self, func, parent):
@@ -407,8 +410,9 @@ class Compiler:
           self.func.symtab[node.lhs.name] = last.FuncSymTabEntry(
               self.parent.expr_type(self.func, node.rhs), node, is_declared_local=True)
 
-  def build_func_symbol_table(self, func):
-    self.visit(self.FuncSymTabVisit(func, self), func)
+  def build_function_symtabs(self):
+    for f in self.find_func_defs(self.ast_root):
+      self.visit(self.FuncSymTabVisit(f, self), f)
 
   def visit(self, visitor, node, do_not_cross_types=None):
     x = getattr(visitor, 'visit_' + node.__class__.__name__, None)
@@ -430,19 +434,19 @@ class Compiler:
           if isinstance(lx, last.AstNode):
             self.visit(visitor, lx, do_not_cross_types)
 
+  def insert_global_or_error(self, node):
+    name = node.name
+    if self.globals.get(name):
+      self.error_at(node, 'redefinition at global scope of "%s"' % name)
+    self.globals[name] = node
+
   def find_globals(self):
     assert isinstance(self.ast_root, last.TopLevel), self.ast_root
-
-    def insert_global_or_error(node):
-      name = node.name
-      if self.globals.get(name):
-        self.error_at(node, 'redefinition at global scope of "%s"' % name)
-      self.globals[name] = node
 
     for tl in self.ast_root.body.entries:
       if (isinstance(tl, last.FuncDef) or
           isinstance(tl, last.VarDecl)):
-        insert_global_or_error(tl)
+        self.insert_global_or_error(tl)
       elif isinstance(tl, last.Assign) and isinstance(tl.lhs, last.Ident):
         # Handled below.
         pass
@@ -455,12 +459,7 @@ class Compiler:
         x = last.VarDecl(self.expr_type(None, tl.rhs), tl.lhs.name, tl.rhs)
         x.copy_meta(tl)
         self.ast_root.body.entries[i] = x
-        insert_global_or_error(x)
-
-    for n,g in self.globals.items():
-      if isinstance(g, last.FuncDef):
-        self.build_func_symbol_table(g)
-
+        self.insert_global_or_error(x)
 
   def find_func_defs(self, start, top_level_only=False):
     class FindFuncDef:
@@ -477,22 +476,67 @@ class Compiler:
           v.name = new
     self.visit(ReplaceIdents(), start)
 
+  def find_upvals(self, func, lexical_func_stack):
+    class FindIdents:
+      def __init__(self): self.idents = []
+      def visit_Ident(self, v): self.idents.append(v)
+    finder = FindIdents()
+    self.visit(finder, func.body, do_not_cross_types=[last.FuncDef])
+
+    to_bind = []
+    for i in finder.idents:
+      for f in reversed(lexical_func_stack):
+        if in_upper := f.symtab.get(i.name):
+          if f != func:
+            #print('upval req for %s of %s, found in %s' % (i.name, func.name, f.name))
+            fste = last.FuncSymTabEntry(in_upper.type, in_upper.ref_node, is_upval=True)
+            func.symtab[i.name] = fste
+            to_bind.append((i.name, fste))
+    return to_bind
+
+  class Hoister:
+    def __init__(self, parent):
+      self.parent = parent
+      self.add_to_toplevel = []
+      self.cur_func_stack = []
+
+    def hoist(self, root):
+      func_defs = self.parent.find_func_defs(root, top_level_only=True)
+      for nested in func_defs:
+        if self.cur_func_stack:
+          cur = self.cur_func_stack[-1]
+          # Give the hoisted function a unique-ish name.
+          old_name = nested.name
+          new_name = old_name + '__hoisted_from_%s' % cur.name
+          nested.name = new_name
+
+          to_bind = self.parent.find_upvals(nested, self.cur_func_stack)
+          if to_bind:
+            uvb = last.UpvalBindings(to_bind, new_name)
+            cur.upval_bindings[new_name] = uvb
+            nested.params.insert(0,
+                last.TypedVar(last.PointerDecl(last.Type(uvb.struct_name)), '__up'))
+
+          # Remove the declaration from the body of the current function,
+          # replacing calls to it.
+          cur.body.entries.remove(nested)  # TODO: prob unnecessary O(n)
+          self.add_to_toplevel.append(nested)
+          self.parent.replace_ident_references(cur.body, old_name, new_name)
+          #pprint.pprint(cur_func)
+
+        self.cur_func_stack.append(nested)
+        self.hoist(nested.body)
+        self.cur_func_stack.pop()
+
   def hoist_nested_functions(self):
-    func_defs = self.find_func_defs(self.ast_root, top_level_only=True)
-    add_to_toplevel = []
-    while func_defs:
-      cur_func = func_defs.pop()
-      nested_funcs = self.find_func_defs(cur_func.body, top_level_only=True)
-      for nested in nested_funcs:
-        old_name = nested.name
-        new_name = old_name + '__hoisted_from_%s' % cur_func.name
-        nested.name = new_name
-        cur_func.body.entries.remove(nested)  # TODO: prob unnecessary O(n)
-        add_to_toplevel.append(nested)
-        func_defs.append(nested)
-        self.replace_ident_references(cur_func.body, old_name, new_name)
+    h = self.Hoister(self)
+    h.hoist(self.ast_root)
+
     assert isinstance(self.ast_root, last.TopLevel)
-    self.ast_root.body.entries = add_to_toplevel + self.ast_root.body.entries
+    self.ast_root.body.entries = h.add_to_toplevel + self.ast_root.body.entries
+    for tl in h.add_to_toplevel:
+      tl.hidden = True
+      self.insert_global_or_error(tl)
 
   def find_return_stmts(self, func):
     class FindReturns:
@@ -517,11 +561,7 @@ class Compiler:
     elif isinstance(expr, last.Ident):
       if fste := funcdef.symtab.get(expr.name):
         return fste.type
-      #print('IDENT', expr, funcdef.symtab)
-      # params
-      # locals
-      # env(?)
-      # globals
+      assert False, "unhandled Ident expr_type %s" % expr
     elif isinstance(expr, last.Expr):
       if (expr.chain[1].name in ('+', '*', '-', '/') and
           self.expr_type(funcdef, expr.chain[0]) is _KEYWORDS['i32'] and
@@ -557,6 +597,10 @@ class Compiler:
       return 'void'
     if node == _KEYWORDS['f32']:
       return 'float'
+    if isinstance(node, last.PointerDecl):
+      return self.get_c_type(node.base) + '*'
+    if isinstance(node, last.Type):
+      return node.base
     print('GET_C_TYPE', node)
     return '???'
 
@@ -566,7 +610,11 @@ class Compiler:
 
   def expr(self, node):
     if isinstance(node, last.Ident):
-      return self.get_safe_c_name(node.name)
+      fste = self.current_function.symtab.get(node.name)
+      if fste and fste.is_upval:
+        return '*__up->%s' % self.get_safe_c_name(node.name)
+      else:
+        return self.get_safe_c_name(node.name)
     elif isinstance(node, last.Number):
       return str(node.value)  # TODO, safe-ize this, incl floats, etc.
     elif isinstance(node, last.CompExpr):
@@ -577,7 +625,16 @@ class Compiler:
     elif isinstance(node, last.FuncCall):
       result = self.expr(node.func)
       result += '('
-      result += ','.join(self.expr(x) for x in node.args)
+
+      upvals = []
+      if isinstance(node.func, last.Ident):
+        # TODO: this is obviously suck
+        has_uv = self.current_function.upval_bindings.get(node.func.name)
+        if has_uv:
+          # TODO: double hacky, sneaky & here.
+          upvals.append(last.Ident('&' + has_uv.parent_binding_name))
+
+      result += ','.join(self.expr(x) for x in (upvals + node.args))
       result += ')'
       return result
     elif isinstance(node, last.Expr):
@@ -646,10 +703,14 @@ class Compiler:
       rtype = 'int'
     else:
       rtype = self.get_c_type(func.rtype)
-    return '%s %s(%s)' % (rtype, fname, params)
+    # TODO: hidden are hoisted funcs, which should be static, but also need an
+    # indication of exported/not at syntax level.
+    is_static = 'static ' if func.hidden else ''
+    return '%s%s %s(%s)' % (is_static, rtype, fname, params)
 
   def function_definition(self, func):
     result = self.function_forward_declaration(func)
+    self.current_function = func
     result += '{'
     for n, fste in func.symtab.items():
       if fste.is_declared_local:
@@ -657,8 +718,26 @@ class Compiler:
           self.error_at(fste.ref_node, 'can\'t declare local of type "%s"' % fste.type.base)
         result += '%(type)s %(name)s = (%(type)s){0};' % {
             'type': self.get_c_type(fste.type), 'name': self.get_safe_c_name(n)}
+      if fste.is_upval:
+        result += '/* upval %s */\n' % n
+    for n, upval in func.upval_bindings.items():
+      result += '%s %s = {' % (upval.struct_name, upval.parent_binding_name)
+      for name, uv in upval.to_bind:
+        result += '&(%s),' % name
+      result += '};'
     result += self.stmt(func.body)
     result += '}'
+    self.current_function = None
+    return result
+
+  def generate_upval_struct(self, obj):
+    result = ''
+    #pprint.pprint(obj)
+    for n, uvb in obj.upval_bindings.items():
+      result += 'typedef struct {'
+      for name, uv in uvb.to_bind:
+        result += '%s* %s;' % (self.get_c_type(uv.type), self.get_safe_c_name(name))
+      result += '} %s;\n' % uvb.struct_name
     return result
 
   def compile(self, outfn):
@@ -669,6 +748,15 @@ static void printint(int x) {
   printf("%d\n", x);
 }
 
+/*
+ * UPVAL STRUCTS
+ */''')
+
+      for n,obj in self.globals.items():
+        if isinstance(obj, last.FuncDef):
+          f.write(self.generate_upval_struct(obj))
+
+      f.write(r'''
 /*
  * FORWARD DECLARATIONS
  */''')

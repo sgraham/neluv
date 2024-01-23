@@ -55,13 +55,22 @@ class Type(AstNode):
   base: AstNode
 
 @dataclass
-class FuncSymTabEntry:  # Not AstNode, sy
+class FuncSymTabEntry:  # Not AstNode
   type: Type
   ref_node: AstNode  # For error reporting
   is_func_param: bool = False
   is_declared_local: bool = False
-  is_in_env: bool = False
+  is_upval: bool = False
   is_global: bool = False
+
+upval_binding_counter = 0
+class UpvalBindings:  # Not AstNode
+  def __init__(self, to_bind, func_name):
+    self.to_bind = to_bind  # list of fste's to bind
+    self.struct_name = '__upvals__' + func_name
+    global upval_binding_counter
+    self.parent_binding_name = '__uv_' + str(upval_binding_counter)
+    upval_binding_counter += 1
 
 @dataclass
 class FuncDef(AstNode):
@@ -75,6 +84,7 @@ class FuncDef(AstNode):
 
   def __post_init__(self):
     self.symtab = {}  # values are FuncSymTabEntry
+    self.upval_bindings = {}  # names are funcname, values are UpvalBindings
 
 @dataclass
 class FuncType(Type):

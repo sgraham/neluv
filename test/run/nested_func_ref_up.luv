@@ -1,7 +1,10 @@
 def main():
-  x = 12
+  x = 7
   def stuff():
     return x
+  printint(x)
+  x = 12
   printint(stuff())
 ---
+7
 12

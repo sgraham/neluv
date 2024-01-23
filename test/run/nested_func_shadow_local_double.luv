@@ -1,0 +1,13 @@
+def main():
+  x = 12
+  def stuff():
+    x = 4
+    def things():
+      x = 77
+      return x
+    return things()
+  printint(stuff())
+  printint(x)
+---
+77
+12
