@@ -405,7 +405,7 @@ class Compiler:
       if isinstance(node.lhs, last.Ident):  # TODO: Is this sufficient?
         if not self.func.symtab.get(node.lhs.name):
           self.func.symtab[node.lhs.name] = last.FuncSymTabEntry(
-              self.parent.expr_type(node.rhs), node, is_declared_local=True)
+              self.parent.expr_type(self.func, node.rhs), node, is_declared_local=True)
 
   def build_func_symbol_table(self, func):
     self.visit(self.FuncSymTabVisit(func, self), func)
@@ -452,7 +452,7 @@ class Compiler:
     for i, tl in enumerate(self.ast_root.body.entries):
       if isinstance(tl, last.Assign) and isinstance(tl.lhs, last.Ident):
         # Turn simple Assign into VarDecl at global scope
-        x = last.VarDecl(self.expr_type(tl.rhs), tl.lhs.name, tl.rhs)
+        x = last.VarDecl(self.expr_type(None, tl.rhs), tl.lhs.name, tl.rhs)
         x.copy_meta(tl)
         self.ast_root.body.entries[i] = x
         insert_global_or_error(x)
@@ -502,7 +502,7 @@ class Compiler:
     self.visit(finder, func, do_not_cross_types=[last.FuncDef])
     return finder.result
 
-  def expr_type(self, expr):
+  def expr_type(self, funcdef, expr):
     if expr is None:
       return _KEYWORDS['void']
     elif isinstance(expr, last.Number):
@@ -515,15 +515,17 @@ class Compiler:
             self.get_function_return_type(f_in_globals)
           return f_in_globals.rtype
     elif isinstance(expr, last.Ident):
+      if fste := funcdef.symtab.get(expr.name):
+        return fste.type
+      #print('IDENT', expr, funcdef.symtab)
       # params
       # locals
       # env(?)
       # globals
-      pass
     elif isinstance(expr, last.Expr):
       if (expr.chain[1].name in ('+', '*', '-', '/') and
-          self.expr_type(expr.chain[0]) is _KEYWORDS['i32'] and
-          self.expr_type(expr.chain[2]) is _KEYWORDS['i32']):
+          self.expr_type(funcdef, expr.chain[0]) is _KEYWORDS['i32'] and
+          self.expr_type(funcdef, expr.chain[2]) is _KEYWORDS['i32']):
         # HACK HACK HACK
         return _KEYWORDS['i32']
     assert False, "unhandled expr_type %s" % expr
@@ -532,7 +534,7 @@ class Compiler:
     return_type = None
     returns = self.find_return_stmts(fd.body)
     for r in returns:
-      this_type = self.expr_type(r.value)
+      this_type = self.expr_type(fd, r.value)
       if return_type is None:
         return_type = this_type
       elif return_type != this_type:
@@ -708,7 +710,17 @@ def test_contents(fn):
 
 def dyibicc(c_file):
   clang_path = 'clang'
-  proc = subprocess.run([clang_path, '-c', '-fsyntax-only', c_file])
+  proc = subprocess.run([clang_path,
+    '-c',
+    '-fsyntax-only',
+    '-Wall',
+    '-Wextra',
+    '-Werror',
+    # Possibly detect these and error in our compile.
+    '-Wno-unused-but-set-variable',
+    '-Wno-unused-parameter',
+    '-Wno-unused-variable',
+    c_file])
   if proc.returncode != 0:
     raise RuntimeError('clang compile failed')
 
