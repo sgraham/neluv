@@ -1,0 +1,17 @@
+struct Thing:
+  int x
+  bool y
+  float z
+  u32 w
+
+def main():
+  t = Thing(12, false, 1.0, 0xffff)
+  printbool(t.x == 12)
+  printbool(t.y)
+  printbool(t.z == 1.0)
+  printbool(t.w == 65535)
+---
+true
+false
+true
+true

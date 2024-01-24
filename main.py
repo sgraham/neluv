@@ -154,6 +154,18 @@ class ToAst(Transformer):
     #print('DEC_NUMBER', n, file=sys.stderr)
     return int(n)
 
+  def HEX_NUMBER(self, n):
+    return int(n, 16)
+
+  def OCT_NUMBER(self, n):
+    return int(n, 8)
+
+  def BIN_NUMBER(self, n):
+    return int(n, 2)
+
+  def FLOAT_NUMBER(self, n):
+    return float(n)
+
   def NAME(self, n):
     #print('NAME', n, file=sys.stderr)
     return str(n)
@@ -657,6 +669,10 @@ class Compiler:
   def get_c_type(self, node):
     if node == _KEYWORDS['i32']:
       return 'int32_t'
+    if node == _KEYWORDS['u32']:
+      return 'uint32_t'
+    if node == _KEYWORDS['bool']:
+      return '_Bool'
     if node == _KEYWORDS['void']:
       return 'void'
     if node == _KEYWORDS['f32']:
@@ -683,6 +699,13 @@ class Compiler:
         return self.get_safe_c_name(node.name)
     elif isinstance(node, last.Number):
       return str(node.value)  # TODO, safe-ize this, incl floats, etc.
+    elif isinstance(node, last.Const):
+      if node.name == 'false':
+        return '(/*false*/0)'
+      elif node.name == 'true':
+        return '(/*true*/1)'
+      else:
+        assert False, "unhandled Const %s" % node
     elif isinstance(node, last.CompExpr):
       assert len(node.chain) == 3, "todo chained"
       # TODO: passing op right through
@@ -844,6 +867,9 @@ class Compiler:
 #include <stdio.h>
 static void printint(int x) {
   printf("%d\n", x);
+}
+static void printbool(_Bool x) {
+  printf(x ? "true\n" : "false\n");
 }
 ''')
 
