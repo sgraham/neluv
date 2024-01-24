@@ -3,5 +3,7 @@ compiler/
 venv/
 __pycache__
 .vscode/
+.vs/
 test/run/*.c
 test/type/*.c
+x.*

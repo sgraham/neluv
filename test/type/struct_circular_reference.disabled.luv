@@ -1,0 +1,15 @@
+struct A:
+  int x
+  B b
+
+struct B:
+  int x
+  C c
+
+struct C:
+  int x
+  A a
+
+def main():
+  C c
+---

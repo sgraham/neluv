@@ -192,7 +192,15 @@ class Struct(AstNode):
   members: list[TypedVar]
 
   def __post_init__(self):
-    self.cached_type = None
+    self._cached_type = None
+
+  def cached_type(self):
+    if self._cached_type == None:
+      self._cached_type = Type(self)
+    return self._cached_type
+
+  def __hash__(self):
+    return hash(self.name)
 
 @dataclass
 class Union(AstNode):

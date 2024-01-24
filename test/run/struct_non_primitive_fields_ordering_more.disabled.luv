@@ -1,0 +1,24 @@
+// Currently fails due to dyibicc bug apparently! (oops)
+struct A:
+  int a
+  B b
+
+struct D:
+  int x
+
+struct B:
+  int b
+  C c
+
+struct C:
+  int c
+  D d
+
+def main():
+  d = D(1)
+  c = C(2, d)
+  b = B(3, c)
+  a = A(4, b)
+  printint(a.b.c.d.x)
+---
+1

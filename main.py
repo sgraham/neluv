@@ -447,28 +447,43 @@ class Compiler:
 
   def build_function_symtabs(self):
     for f in self.find_func_defs(self.ast_root):
-      self.visit(self.ScanForNonlocal(f, self), f.body, do_not_cross_types=[last.FuncDef])
-      self.visit(self.FuncSymTab(f, self), f.body, do_not_cross_types=[last.FuncDef])
+      self.Visit(self.ScanForNonlocal(f, self), f.body, do_not_cross_types=[last.FuncDef])
+      self.Visit(self.FuncSymTab(f, self), f.body, do_not_cross_types=[last.FuncDef])
 
-  def visit(self, visitor, node, do_not_cross_types=None):
-    x = getattr(visitor, 'visit_' + node.__class__.__name__, None)
-    if x:
-      x(node)
+  class Visit:
+    def __init__(self, visitor, node, do_not_cross_types=None):
+      self.visitor = visitor
+      self.start = node
+      self.do_not_cross_types = do_not_cross_types
+      self.visited = set()
+      self.impl(self.start)
 
-    if do_not_cross_types:
-      for dnct in do_not_cross_types:
-        if isinstance(node, dnct):
-          return
+    def impl(self, node):
+      #TODO recursive
+      #if node in self.visited:
+        #return
 
-    for f in dataclasses.fields(node):
-      field = getattr(node, f.name)
+      x = getattr(self.visitor, 'visit_' + node.__class__.__name__, None)
+      if x:
+        x(node)
 
-      if isinstance(field, last.AstNode):
-        self.visit(visitor, field, do_not_cross_types)
-      elif isinstance(field, list):
-        for lx in field:
-          if isinstance(lx, last.AstNode):
-            self.visit(visitor, lx, do_not_cross_types)
+      #TODO recursive
+      #self.visited.add(node)
+
+      if self.do_not_cross_types:
+        for dnct in self.do_not_cross_types:
+          if isinstance(node, dnct):
+            return
+
+      for f in dataclasses.fields(node):
+        field = getattr(node, f.name)
+
+        if isinstance(field, last.AstNode):
+          self.impl(field)
+        elif isinstance(field, list):
+          for lx in field:
+            if isinstance(lx, last.AstNode):
+              self.impl(lx)
 
   def insert_global_or_error(self, node):
     name = node.name
@@ -501,12 +516,23 @@ class Compiler:
         self.ast_root.body.entries[i] = x
         self.insert_global_or_error(x)
 
+    # Resolve idents in structs to point at other structs (TODO: should this be here?)
+    for n,ste in self.globals.items():
+      obj = ste.ref_node
+      if isinstance(obj, last.Struct):
+        for f in obj.members:
+          if isinstance(f.type, last.Ident):
+            resolved = self.globals.get(f.type.name)
+            # TODO: more lax probably
+            if resolved.ref_node and isinstance(resolved.ref_node, last.Struct):
+              f.type = resolved.ref_node.cached_type()
+
   def find_func_defs(self, start, top_level_only=False):
     class FindFuncDef:
       def __init__(self): self.result = []
       def visit_FuncDef(self, node): self.result.append(node)
     finder = FindFuncDef()
-    self.visit(finder, start, do_not_cross_types=[last.FuncDef] if top_level_only else None)
+    self.Visit(finder, start, do_not_cross_types=[last.FuncDef] if top_level_only else None)
     return finder.result
 
   def replace_ident_references(self, start, old, new):
@@ -514,7 +540,7 @@ class Compiler:
       def visit_Ident(self, v):
         if v.name == old:
           v.name = new
-    self.visit(ReplaceIdents(), start)
+    self.Visit(ReplaceIdents(), start)
 
   def find_upvals(self, func, lexical_func_stack):
     class FindIdents:
@@ -525,7 +551,7 @@ class Compiler:
     # We do have to decend into sub-functions here (i.e. not just the strict
     # body of this function) because if a further nested function refers to
     # something above this function, we need to request it from the parent.
-    self.visit(finder, func.body)
+    self.Visit(finder, func.body)
 
     # Find all the identifiers referenced in this function that refer to a
     # parent scope. Add entries to this function's symtab (marking them as
@@ -614,7 +640,7 @@ class Compiler:
       def __init__(self): self.result = []
       def visit_Return(self, node): self.result.append(node)
     finder = FindReturns()
-    self.visit(finder, func, do_not_cross_types=[last.FuncDef])
+    self.Visit(finder, func, do_not_cross_types=[last.FuncDef])
     return finder.result
 
   def expr_type(self, funcdef, expr):
@@ -631,9 +657,7 @@ class Compiler:
             self.get_function_return_type(in_globals)
           return in_globals.rtype
         elif isinstance(in_globals, last.Struct):
-          if not in_globals.cached_type:
-            in_globals.cached_type = last.Type(in_globals)
-          return in_globals.cached_type
+          return in_globals.cached_type()
     elif isinstance(expr, last.Ident):
       if ste := funcdef.symtab.get(expr.name):
         return ste.type
@@ -843,11 +867,15 @@ class Compiler:
 
   def generate_struct(self, obj):
     assert isinstance(obj, last.Struct)
-    result = 'struct %s {\n' % obj.name
+    result = '\nstruct %s {\n' % obj.name
     for field in obj.members:
       result += '%s %s;\n' % (self.get_c_type(field.type), self.get_safe_c_name(field.name))
-    result += '};'
-    result += 'struct %s %s(' % (obj.name, obj.name)
+    result += '};\n'
+    return result
+
+  def generate_struct_constructor(self, obj):
+    assert isinstance(obj, last.Struct)
+    result = '\nstruct %s %s(' % (obj.name, obj.name)
     for i,field in enumerate(obj.members):
       result += '%s %s' % (self.get_c_type(field.type), self.get_safe_c_name(field.name))
       if i < len(obj.members) - 1:
@@ -860,6 +888,35 @@ class Compiler:
     result += 'return _;'
     result += '}\n'
     return result
+
+  def topo_struct_sort(self, structs):
+    L = []
+    permanent = set()
+    temporary = set()
+    unmarked = set(s for s in structs)
+
+    def visit(n):
+      if n in permanent:
+        return
+      if n in temporary:
+        self.error_at(n, 'recursive struct definition for "%s"' % n.name)
+        return
+
+      temporary.add(n)
+
+      for mem in n.members:
+        if isinstance(mem.type, last.Type) and isinstance(mem.type.base, last.Struct):
+          visit(mem.type.base)
+
+      temporary.remove(n)
+      permanent.add(n)
+      L.append(n)
+
+    while unmarked:
+      n = unmarked.pop()
+      visit(n)
+
+    return L
 
   def compile(self, outfn):
     with open(outfn, 'w', newline='\n') as f:
@@ -879,11 +936,17 @@ static void printbool(_Bool x) {
         f.write('// ' + s + '\n')
         f.write('// ' + '-'*77 + '\n')
 
+      all_structs = [ste.ref_node for n,ste in self.globals.items()
+                     if isinstance(ste.ref_node, last.Struct)]
+      sorted_structs = self.topo_struct_sort(all_structs)
+
       header('struct decls')
-      for n,ste in self.globals.items():
-        obj = ste.ref_node
-        if isinstance(obj, last.Struct):
-          f.write(self.generate_struct(obj))
+      for obj in sorted_structs:
+        f.write(self.generate_struct(obj))
+
+      header('struct constructors')
+      for obj in sorted_structs:
+        f.write(self.generate_struct_constructor(obj))
 
       header('upval structs')
       for n,ste in self.globals.items():

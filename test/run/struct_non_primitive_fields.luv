@@ -1,0 +1,17 @@
+struct B:
+  int boo
+
+struct A:
+  bool x
+  B y
+  bool z
+
+def main():
+  a = A(false, B(123), true)
+  printbool(a.x)
+  printint(a.y.boo)
+  printbool(a.z)
+---
+false
+123
+true
