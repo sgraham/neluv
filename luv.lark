@@ -45,7 +45,7 @@ returntype: var_decl_type
 
 assign: testlist_star_expr ("=" testlist_star_expr)+
       | typed_var ("=" testlist_star_expr)* -> var_decl_init
- 
+
 augassign: testlist_star_expr augassign_op testlist
 !augassign_op: "+=" | "-=" | "*=" | "@=" | "/=" | "%=" | "&=" | "|=" | "^=" | "<<=" | ">>=" | "**=" | "//="
 ?testlist_star_expr: test_or_star_expr

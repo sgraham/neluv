@@ -472,13 +472,14 @@ class Compiler:
 
     for tl in self.ast_root.body.entries:
       if (isinstance(tl, last.FuncDef) or
-          isinstance(tl, last.VarDecl)):
+          isinstance(tl, last.VarDecl) or
+          isinstance(tl, last.Struct)):
         self.insert_global_or_error(tl)
       elif isinstance(tl, last.Assign) and isinstance(tl.lhs, last.Ident):
         # Handled below.
         pass
       else:
-        self.error_at(tl, 'syntax error %s' % tl)
+        self.error_at(tl, 'unexpected at top level %s' % tl)
 
     for i, tl in enumerate(self.ast_root.body.entries):
       if isinstance(tl, last.Assign) and isinstance(tl.lhs, last.Ident):
@@ -573,7 +574,7 @@ class Compiler:
             uvb = last.UpvalBindings(to_bind, new_name)
             cur.upval_bindings[new_name] = uvb
             nested.params.insert(0,
-                last.TypedVar(last.PointerDecl(last.Type(uvb.struct_name)), '$up'))
+                last.TypedVar(last.PointerDecl(uvb.struct), '$up'))
 
           # Remove the declaration from the body of the current function,
           # replacing calls to it.
@@ -612,11 +613,15 @@ class Compiler:
     elif isinstance(expr, last.FuncCall):
       if isinstance(expr.func, last.Ident):
         ste_in_globals = self.globals.get(expr.func.name)
-        f_in_globals = ste_in_globals.ref_node
-        if isinstance(f_in_globals, last.FuncDef):
-          if f_in_globals.rtype is _KEYWORDS['auto']:
-            self.get_function_return_type(f_in_globals)
-          return f_in_globals.rtype
+        in_globals = ste_in_globals.ref_node
+        if isinstance(in_globals, last.FuncDef):
+          if in_globals.rtype is _KEYWORDS['auto']:
+            self.get_function_return_type(in_globals)
+          return in_globals.rtype
+        elif isinstance(in_globals, last.Struct):
+          if not in_globals.cached_type:
+            in_globals.cached_type = last.Type(in_globals)
+          return in_globals.cached_type
     elif isinstance(expr, last.Ident):
       if ste := funcdef.symtab.get(expr.name):
         return ste.type
@@ -659,7 +664,9 @@ class Compiler:
     if isinstance(node, last.PointerDecl):
       return self.get_c_type(node.base) + '*'
     if isinstance(node, last.Type):
-      return node.base
+      return self.get_c_type(node.base)
+    if isinstance(node, last.Struct):
+      return 'struct ' + node.name
     print('GET_C_TYPE', node)
     return '???'
 
@@ -681,6 +688,8 @@ class Compiler:
       # TODO: passing op right through
       return '(%s) %s (%s)' % (
           self.expr(node.chain[0]), node.chain[1].name, self.expr(node.chain[2]))
+    elif isinstance(node, last.GetAttr):
+      return self.expr(node.lhs) + '.' + node.rhs
     elif isinstance(node, last.FuncCall):
       result = self.expr(node.func)
       result += '('
@@ -781,7 +790,7 @@ class Compiler:
         result += '%(type)s %(name)s = (%(type)s){0};' % {
             'type': self.get_c_type(ste.type), 'name': self.get_safe_c_name(n)}
     for n, upval in func.upval_bindings.items():
-      result += '%s %s = {' % (upval.struct_name, upval.parent_binding_name)
+      result += 'struct %s %s = {' % (upval.struct_name, upval.parent_binding_name)
       for name, uv in upval.to_bind.items():
         in_cur_func = func.symtab[name]
         # If the source of this variable is already an upval (i.e. we're in the
@@ -801,11 +810,32 @@ class Compiler:
   def generate_upval_struct(self, obj):
     result = ''
     #pprint.pprint(obj)
+    # TODO: probably homogenize this with user structs.
     for n, uvb in obj.upval_bindings.items():
-      result += 'typedef struct {'
+      result += 'struct %s {' % uvb.struct_name
       for name, uv in uvb.to_bind.items():
         result += '%s* %s;' % (self.get_c_type(uv.type), self.get_safe_c_name(name))
-      result += '} %s;\n' % uvb.struct_name
+      result += '};\n'
+    return result
+
+  def generate_struct(self, obj):
+    assert isinstance(obj, last.Struct)
+    result = 'struct %s {\n' % obj.name
+    for field in obj.members:
+      result += '%s %s;\n' % (self.get_c_type(field.type), self.get_safe_c_name(field.name))
+    result += '};'
+    result += 'struct %s %s(' % (obj.name, obj.name)
+    for i,field in enumerate(obj.members):
+      result += '%s %s' % (self.get_c_type(field.type), self.get_safe_c_name(field.name))
+      if i < len(obj.members) - 1:
+        result += ','
+    result += '){\n'
+    result += 'struct %s _ = {0};\n' % obj.name
+    for field in obj.members:
+      n = self.get_safe_c_name(field.name)
+      result += '_.%s = %s;\n' % (n, n)
+    result += 'return _;'
+    result += '}\n'
     return result
 
   def compile(self, outfn):
@@ -815,30 +845,34 @@ class Compiler:
 static void printint(int x) {
   printf("%d\n", x);
 }
+''')
 
-/*
- * UPVAL STRUCTS
- */''')
+      def header(s):
+        f.write('\n\n')
+        f.write('// ' + '-'*77 + '\n')
+        f.write('// ' + s + '\n')
+        f.write('// ' + '-'*77 + '\n')
 
+      header('struct decls')
+      for n,ste in self.globals.items():
+        obj = ste.ref_node
+        if isinstance(obj, last.Struct):
+          f.write(self.generate_struct(obj))
+
+      header('upval structs')
       for n,ste in self.globals.items():
         obj = ste.ref_node
         if isinstance(obj, last.FuncDef):
           f.write(self.generate_upval_struct(obj))
 
-      f.write(r'''
-/*
- * FORWARD DECLARATIONS
- */''')
+      header('function forward decls')
       for n,ste in self.globals.items():
         obj = ste.ref_node
         if isinstance(obj, last.FuncDef):
           f.write(self.function_forward_declaration(obj))
           f.write(';\n')
 
-      f.write(r'''
-/*
- * GLOBALS
- */''')
+      header('globals')
       for n,ste in self.globals.items():
         obj = ste.ref_node
         if isinstance(obj, last.VarDecl):
@@ -851,10 +885,7 @@ static void printint(int x) {
             f.write(' = %s' % self.expr(obj.init))
           f.write(';\n')
 
-      f.write(r'''
-/*
- * FUNCTIONS
- */''')
+      header('function implementations')
       for n,ste in self.globals.items():
         obj = ste.ref_node
         if isinstance(obj, last.FuncDef):

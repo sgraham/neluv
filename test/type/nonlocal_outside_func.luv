@@ -3,4 +3,4 @@ def main():
   pass
 ---
 !
-test/type/nonlocal_outside_func.luv:1:1:syntax error Nonlocal(vars=['z'])
+test/type/nonlocal_outside_func.luv:1:1:unexpected at top level Nonlocal(vars=['z'])

@@ -1,0 +1,8 @@
+struct Stuff:
+  int x
+
+def main():
+  s = Stuff(14)
+  printint(s.x)
+---
+14

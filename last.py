@@ -52,7 +52,11 @@ class TopLevel(AstNode):
 
 @dataclass
 class Type(AstNode):
-  base: AstNode
+  # Can be:
+  # - an entry in _KEYWORDS (for basic types)
+  # - a reference to another Type (for pointer-to, etc.)
+  # - a reference an AstNode for a user-defined type
+  base: object
 
 @dataclass
 class SymTabEntry:  # Not AstNode
@@ -69,6 +73,8 @@ class UpvalBindings:  # Not AstNode
   def __init__(self, to_bind, func_name):
     self.to_bind = to_bind  # map of ident to ste's to bind
     self.struct_name = '$Upvals_' + func_name
+    mems = [TypedVar(ste.type, n) for n,ste in to_bind.items()]
+    self.struct = Struct(self.struct_name, mems)
     global upval_binding_counter
     self.parent_binding_name = '$uv' + str(upval_binding_counter)
     upval_binding_counter += 1
@@ -183,7 +189,10 @@ class GetItem(AstNode):
 @dataclass
 class Struct(AstNode):
   name: str
-  members: list[Type]
+  members: list[TypedVar]
+
+  def __post_init__(self):
+    self.cached_type = None
 
 @dataclass
 class Union(AstNode):
