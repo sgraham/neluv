@@ -1,0 +1,6 @@
+nonlocal z
+def main():
+  pass
+---
+!
+test/type/nonlocal_outside_func.luv:1:1:syntax error Nonlocal(vars=['z'])

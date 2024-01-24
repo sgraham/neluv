@@ -1,0 +1,21 @@
+def main():
+  x = 4
+  def inner():
+    nonlocal x
+    return x
+  return inner()
+---
+TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
+                                     name='main',
+                                     params=[],
+                                     body=Block(entries=[Assign(lhs=Ident(name='x'),
+                                                                rhs=Number(value=4)),
+                                                         FuncDef(rtype=Type(base='auto'),
+                                                                 name='inner',
+                                                                 params=[],
+                                                                 body=Block(entries=[Nonlocal(vars=['x']),
+                                                                                     Return(value=Ident(name='x'))]),
+                                                                 hidden=False),
+                                                         Return(value=FuncCall(func=Ident(name='inner'),
+                                                                               args=[]))]),
+                                     hidden=False)]))

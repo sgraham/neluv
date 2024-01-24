@@ -1,0 +1,7 @@
+def main():
+  def inner():
+    nonlocal z
+    printint(z)
+---
+!
+test/type/nonlocal_unbound.luv:3:5:no binding for nonlocal "z" found

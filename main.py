@@ -253,6 +253,9 @@ class ToAst(Transformer):
   def pass_stmt(self, children):
     return last.Pass()
 
+  def nonlocal_stmt(self, children):
+    return last.Nonlocal(children)
+
   def for_stmt(self, children):
     return last.For(children[0], children[1], children[2], children[3])
 
@@ -390,7 +393,11 @@ class Compiler:
 
     self.current_function = None
 
-  class FuncSymTabVisit:
+  def is_lexically_before(self, a, b):
+    if a.line == b.line: return a.column < b.column
+    return a.line < b.line
+
+  class FuncSymTab:
     def __init__(self, func, parent):
       self.func = func
       self.parent = parent
@@ -401,18 +408,35 @@ class Compiler:
     def visit_VarDecl(self, node):
       x = self.func.symtab.get(node.name)
       if x:
-        self.parent.error_at(node, 'redefinition of "%s" in "%s"' % (node.name, self.func.name))
+        if x.is_pending_nonlocal and self.parent.is_lexically_before(node, x.ref_node):
+          self.parent.error_at(node, 'name "%s" is used before nonlocal declaration' % node.name)
+        else:
+          self.parent.error_at(node,
+              'redefinition of "%s" in "%s"' % (node.name, self.func.name))
       self.func.symtab[node.name] = last.FuncSymTabEntry(node.type, node, is_declared_local=True)
 
     def visit_Assign(self, node):
       if isinstance(node.lhs, last.Ident):  # TODO: Is this sufficient?
-        if not self.func.symtab.get(node.lhs.name):
+        x = self.func.symtab.get(node.lhs.name)
+        if not x:
           self.func.symtab[node.lhs.name] = last.FuncSymTabEntry(
               self.parent.expr_type(self.func, node.rhs), node, is_declared_local=True)
+        elif x.is_pending_nonlocal and self.parent.is_lexically_before(node, x.ref_node):
+          self.parent.error_at(node,
+              'name "%s" is used before nonlocal declaration' % node.lhs.name)
+
+  class ScanForNonlocal:
+    def __init__(self, func, parent):
+      self.func = func
+      self.parent = parent
+    def visit_Nonlocal(self, node):
+      for name in node.vars:
+        self.func.symtab[name] = last.FuncSymTabEntry(None, node, is_pending_nonlocal=True)
 
   def build_function_symtabs(self):
     for f in self.find_func_defs(self.ast_root):
-      self.visit(self.FuncSymTabVisit(f, self), f.body, do_not_cross_types=[last.FuncDef])
+      self.visit(self.ScanForNonlocal(f, self), f.body, do_not_cross_types=[last.FuncDef])
+      self.visit(self.FuncSymTab(f, self), f.body, do_not_cross_types=[last.FuncDef])
 
   def visit(self, visitor, node, do_not_cross_types=None):
     x = getattr(visitor, 'visit_' + node.__class__.__name__, None)
@@ -479,7 +503,8 @@ class Compiler:
   def find_upvals(self, func, lexical_func_stack):
     class FindIdents:
       def __init__(self): self.idents = []
-      def visit_Ident(self, v): self.idents.append(v)
+      def visit_Ident(self, v): self.idents.append(v.name)
+      def visit_Nonlocal(self, v): self.idents.extend(v.vars)
     finder = FindIdents()
     # We do have to decend into sub-functions here (i.e. not just the strict
     # body of this function) because if a further nested function refers to
@@ -491,15 +516,31 @@ class Compiler:
     # upval) and also return them.
     to_bind = {}
     for i in finder.idents:
+      pending_non_local = None
+      pending_non_local_name = None
       for f in reversed(lexical_func_stack):
-        if in_upper := f.symtab.get(i.name):
+        in_upper = f.symtab.get(i)
+        if in_upper and in_upper.is_pending_nonlocal:
+          # If it was found, but it's marked as nonlocal, then we need to search
+          # higher, so note that we are searching for it and continue (so that
+          # we can fail out if it's not found at a higher scope).
+          pending_non_local = in_upper
+          pending_non_local_name = i
+          continue
+        if in_upper:
           if f != func:
-            #print('upval req for %s of %s, found in %s' % (i.name, func.name, f.name))
+            #print('upval req for %s of %s, found in %s' % (i, func.name, f.name))
             fste = last.FuncSymTabEntry(in_upper.type, in_upper.ref_node, is_upval=True)
-            func.symtab[i.name] = fste
-            to_bind[i.name] = fste
+            func.symtab[i] = fste
+            to_bind[i] = fste
+            pending_non_local = pending_non_local_name = None
           else:
             break
+      else:
+        if pending_non_local:
+          self.error_at(pending_non_local.ref_node,
+              'no binding for nonlocal "%s" found' % pending_non_local_name)
+
     return to_bind
 
   class Hoister:
@@ -687,6 +728,18 @@ class Compiler:
       return result
     elif isinstance(node, last.Pass):
       return ';'
+    elif isinstance(node, last.Nonlocal):
+      '''
+      if not self.current_function:
+        error_at(node, "nonlocal invalid outside of function")
+      for name in node.vars:
+        if self.current_function.symtab.get(name):
+          self.error_at(node, 'name "%s" is used before nonlocal declaration' % name)
+      for name in node.vars:
+        self.current_function.symtab[name] = last.FuncSymTabEntry(
+            None, node, is_pending_nonlocal=True)
+            '''
+      return ''
     elif isinstance(node, last.Assign):
       return '%s = %s;' % (self.expr(node.lhs), self.expr(node.rhs))
     elif isinstance(node, last.VarDecl):
@@ -846,8 +899,9 @@ def do_tests(parser, test_list, update):
   passed_list = []
   err = None
   def tt_error_at(node, msg):
-    err['node'] = node
-    err['msg'] = msg
+    nonlocal err
+    if err: return
+    err = (node, msg)
 
   for t in test_list:
     #print(t)
@@ -863,11 +917,11 @@ def do_tests(parser, test_list, update):
     if t.startswith('test/parse'):
       got = pprint.pformat(ast)
     elif t.startswith('test/type'):
-      err = {}
+      err = None
       c = Compiler(t, ast, error_at=tt_error_at)
       c_file = os.path.splitext(t)[0] + '.c'
       c.compile(c_file)
-      got = '!\n%s:%d:%d:%s' % (t, err['node'].line, err['node'].column, err['msg'])
+      got = '!\n%s:%d:%d:%s' % (t, err[0].line, err[0].column, err[1])
     elif t.startswith('test/run'):
       c = Compiler(t, ast)
       c_file = os.path.splitext(t)[0] + '.c'

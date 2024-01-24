@@ -1,0 +1,16 @@
+// This doesn't match Python, but for now I think I like it better than
+// adding the global keyword, which also auto-creates the global even if it's
+// not ever assigned at global scope.
+x = 12
+def main():
+  def stuff():
+    nonlocal x
+    x = 4
+    return x
+  printint(x)
+  printint(stuff())
+  printint(x)
+---
+12
+4
+4

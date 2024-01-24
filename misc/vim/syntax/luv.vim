@@ -16,7 +16,6 @@ syn keyword     luvKeyword       elif
 syn keyword     luvKeyword       else
 syn keyword     luvKeyword       false
 syn keyword     luvKeyword       for
-syn keyword     luvKeyword       global
 syn keyword     luvKeyword       if
 syn keyword     luvKeyword       in
 syn keyword     luvKeyword       not

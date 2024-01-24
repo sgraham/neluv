@@ -62,6 +62,7 @@ class FuncSymTabEntry:  # Not AstNode
   is_declared_local: bool = False
   is_upval: bool = False
   is_global: bool = False
+  is_pending_nonlocal: bool = False
 
 upval_binding_counter = 0
 class UpvalBindings:  # Not AstNode
@@ -115,6 +116,10 @@ class Return(AstNode):
 @dataclass
 class Pass(AstNode):
   pass
+
+@dataclass
+class Nonlocal(AstNode):
+  vars: list[str]
 
 @dataclass
 class For(AstNode):

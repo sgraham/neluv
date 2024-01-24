@@ -1,0 +1,9 @@
+def main():
+  z = 4
+  def inner():
+    int z = 4
+    printint(z)
+    nonlocal z
+---
+!
+test/type/nonlocal_too_late_decl.luv:4:5:name "z" is used before nonlocal declaration
