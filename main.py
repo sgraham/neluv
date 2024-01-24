@@ -378,7 +378,7 @@ class Typer:
 
 class Compiler:
   def __init__(self, filename, ast_root, error_at=None):
-    self.globals = {}
+    self.globals = {}  # values are SymTabEntry
     self.filename = filename
     def default_error_at(node, msg):
       print('%s:%d:%d:error: %s' % (self.filename, node.line, node.column, msg), file=sys.stderr)
@@ -462,7 +462,10 @@ class Compiler:
     name = node.name
     if self.globals.get(name):
       self.error_at(node, 'redefinition at global scope of "%s"' % name)
-    self.globals[name] = node
+    ty = None
+    if isinstance(node, last.VarDecl):
+      ty = node.type
+    self.globals[name] = last.SymTabEntry(ty, node, is_global=True)
 
   def find_globals(self):
     assert isinstance(self.ast_root, last.TopLevel), self.ast_root
@@ -538,8 +541,14 @@ class Compiler:
             break
       else:
         if pending_non_local:
-          self.error_at(pending_non_local.ref_node,
-              'no binding for nonlocal "%s" found' % pending_non_local_name)
+          if x := self.globals.get(i):
+            # If it's a global, then we can just reference it, no need to pass
+            # it in from the parent, but don't error out.
+            pending_non_local.is_global = True
+            pending_non_local.type = x.type
+          else:
+            self.error_at(pending_non_local.ref_node,
+                'no binding for nonlocal "%s" found' % pending_non_local_name)
 
     return to_bind
 
@@ -602,7 +611,8 @@ class Compiler:
       return _KEYWORDS['i32']  # XXX all number types
     elif isinstance(expr, last.FuncCall):
       if isinstance(expr.func, last.Ident):
-        f_in_globals = self.globals.get(expr.func.name)
+        ste_in_globals = self.globals.get(expr.func.name)
+        f_in_globals = ste_in_globals.ref_node
         if isinstance(f_in_globals, last.FuncDef):
           if f_in_globals.rtype is _KEYWORDS['auto']:
             self.get_function_return_type(f_in_globals)
@@ -810,7 +820,8 @@ static void printint(int x) {
  * UPVAL STRUCTS
  */''')
 
-      for n,obj in self.globals.items():
+      for n,ste in self.globals.items():
+        obj = ste.ref_node
         if isinstance(obj, last.FuncDef):
           f.write(self.generate_upval_struct(obj))
 
@@ -818,7 +829,8 @@ static void printint(int x) {
 /*
  * FORWARD DECLARATIONS
  */''')
-      for n,obj in self.globals.items():
+      for n,ste in self.globals.items():
+        obj = ste.ref_node
         if isinstance(obj, last.FuncDef):
           f.write(self.function_forward_declaration(obj))
           f.write(';\n')
@@ -827,7 +839,8 @@ static void printint(int x) {
 /*
  * GLOBALS
  */''')
-      for n,obj in self.globals.items():
+      for n,ste in self.globals.items():
+        obj = ste.ref_node
         if isinstance(obj, last.VarDecl):
           if obj.type is _KEYWORDS['void']:
             self.error_at(obj, 'can\'t declare global of type "%s"' % obj.type.base)
@@ -842,7 +855,8 @@ static void printint(int x) {
 /*
  * FUNCTIONS
  */''')
-      for n,obj in self.globals.items():
+      for n,ste in self.globals.items():
+        obj = ste.ref_node
         if isinstance(obj, last.FuncDef):
           f.write(self.function_definition(obj))
 

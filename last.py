@@ -84,7 +84,7 @@ class FuncDef(AstNode):
   hidden: bool = False
 
   def __post_init__(self):
-    self.symtab = {}  # values are FuncSymTabEntry
+    self.symtab = {}  # values are SymTabEntry
     self.upval_bindings = {}  # names are funcname, values are UpvalBindings
 
 @dataclass
