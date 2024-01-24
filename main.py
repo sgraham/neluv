@@ -403,7 +403,7 @@ class Compiler:
       self.parent = parent
       for p in func.params:
         assert isinstance(p, last.TypedVar)
-        func.symtab[p.name] = last.FuncSymTabEntry(p.type, p, is_func_param=True)
+        func.symtab[p.name] = last.SymTabEntry(p.type, p, is_func_param=True)
 
     def visit_VarDecl(self, node):
       x = self.func.symtab.get(node.name)
@@ -413,13 +413,13 @@ class Compiler:
         else:
           self.parent.error_at(node,
               'redefinition of "%s" in "%s"' % (node.name, self.func.name))
-      self.func.symtab[node.name] = last.FuncSymTabEntry(node.type, node, is_declared_local=True)
+      self.func.symtab[node.name] = last.SymTabEntry(node.type, node, is_declared_local=True)
 
     def visit_Assign(self, node):
       if isinstance(node.lhs, last.Ident):  # TODO: Is this sufficient?
         x = self.func.symtab.get(node.lhs.name)
         if not x:
-          self.func.symtab[node.lhs.name] = last.FuncSymTabEntry(
+          self.func.symtab[node.lhs.name] = last.SymTabEntry(
               self.parent.expr_type(self.func, node.rhs), node, is_declared_local=True)
         elif x.is_pending_nonlocal and self.parent.is_lexically_before(node, x.ref_node):
           self.parent.error_at(node,
@@ -431,7 +431,7 @@ class Compiler:
       self.parent = parent
     def visit_Nonlocal(self, node):
       for name in node.vars:
-        self.func.symtab[name] = last.FuncSymTabEntry(None, node, is_pending_nonlocal=True)
+        self.func.symtab[name] = last.SymTabEntry(None, node, is_pending_nonlocal=True)
 
   def build_function_symtabs(self):
     for f in self.find_func_defs(self.ast_root):
@@ -530,9 +530,9 @@ class Compiler:
         if in_upper:
           if f != func:
             #print('upval req for %s of %s, found in %s' % (i, func.name, f.name))
-            fste = last.FuncSymTabEntry(in_upper.type, in_upper.ref_node, is_upval=True)
-            func.symtab[i] = fste
-            to_bind[i] = fste
+            ste = last.SymTabEntry(in_upper.type, in_upper.ref_node, is_upval=True)
+            func.symtab[i] = ste
+            to_bind[i] = ste
             pending_non_local = pending_non_local_name = None
           else:
             break
@@ -608,8 +608,8 @@ class Compiler:
             self.get_function_return_type(f_in_globals)
           return f_in_globals.rtype
     elif isinstance(expr, last.Ident):
-      if fste := funcdef.symtab.get(expr.name):
-        return fste.type
+      if ste := funcdef.symtab.get(expr.name):
+        return ste.type
       assert False, "unhandled Ident expr_type %s" % expr
     elif isinstance(expr, last.Expr):
       if (expr.chain[1].name in ('+', '*', '-', '/') and
@@ -659,8 +659,8 @@ class Compiler:
 
   def expr(self, node):
     if isinstance(node, last.Ident):
-      fste = self.current_function.symtab.get(node.name) if self.current_function else None
-      if fste and fste.is_upval:
+      ste = self.current_function.symtab.get(node.name) if self.current_function else None
+      if ste and ste.is_upval:
         return '*$up->%s' % self.get_safe_c_name(node.name)
       else:
         return self.get_safe_c_name(node.name)
@@ -729,16 +729,6 @@ class Compiler:
     elif isinstance(node, last.Pass):
       return ';'
     elif isinstance(node, last.Nonlocal):
-      '''
-      if not self.current_function:
-        error_at(node, "nonlocal invalid outside of function")
-      for name in node.vars:
-        if self.current_function.symtab.get(name):
-          self.error_at(node, 'name "%s" is used before nonlocal declaration' % name)
-      for name in node.vars:
-        self.current_function.symtab[name] = last.FuncSymTabEntry(
-            None, node, is_pending_nonlocal=True)
-            '''
       return ''
     elif isinstance(node, last.Assign):
       return '%s = %s;' % (self.expr(node.lhs), self.expr(node.rhs))
@@ -774,12 +764,12 @@ class Compiler:
     result = self.function_forward_declaration(func)
     self.current_function = func
     result += '{'
-    for n, fste in func.symtab.items():
-      if fste.is_declared_local:
-        if fste.type is _KEYWORDS['void']:
-          self.error_at(fste.ref_node, 'can\'t declare local of type "%s"' % fste.type.base)
+    for n, ste in func.symtab.items():
+      if ste.is_declared_local:
+        if ste.type is _KEYWORDS['void']:
+          self.error_at(ste.ref_node, 'can\'t declare local of type "%s"' % ste.type.base)
         result += '%(type)s %(name)s = (%(type)s){0};' % {
-            'type': self.get_c_type(fste.type), 'name': self.get_safe_c_name(n)}
+            'type': self.get_c_type(ste.type), 'name': self.get_safe_c_name(n)}
     for n, upval in func.upval_bindings.items():
       result += '%s %s = {' % (upval.struct_name, upval.parent_binding_name)
       for name, uv in upval.to_bind.items():

@@ -55,7 +55,7 @@ class Type(AstNode):
   base: AstNode
 
 @dataclass
-class FuncSymTabEntry:  # Not AstNode
+class SymTabEntry:  # Not AstNode
   type: Type
   ref_node: AstNode  # For error reporting
   is_func_param: bool = False
@@ -67,7 +67,7 @@ class FuncSymTabEntry:  # Not AstNode
 upval_binding_counter = 0
 class UpvalBindings:  # Not AstNode
   def __init__(self, to_bind, func_name):
-    self.to_bind = to_bind  # map of ident to fste's to bind
+    self.to_bind = to_bind  # map of ident to ste's to bind
     self.struct_name = '$Upvals_' + func_name
     global upval_binding_counter
     self.parent_binding_name = '$uv' + str(upval_binding_counter)
