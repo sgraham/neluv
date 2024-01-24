@@ -13,3 +13,5 @@ struct C:
 def main():
   C c
 ---
+!
+test/type/struct_circular_reference.luv:1:1:recursive struct definition for "A"

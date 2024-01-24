@@ -12,8 +12,6 @@ from lark.indenter import PythonIndenter
 
 import last
 
-this_module = sys.modules[__name__]
-
 _TEST_CODE2 = '''
 if x > 2:
   print(4)
@@ -133,6 +131,7 @@ _KEYWORDS = {
   'true': last.Const('true'),
 }
 
+visit_tag_counter = 0
 
 def load_builtin_macros():
   for x in ["print"]:
@@ -456,19 +455,20 @@ class Compiler:
       self.start = node
       self.do_not_cross_types = do_not_cross_types
       self.visited = set()
+      global visit_tag_counter
+      visit_tag_counter += 1
+      self.visit_tag = visit_tag_counter
       self.impl(self.start)
 
     def impl(self, node):
-      #TODO recursive
-      #if node in self.visited:
-        #return
+      if hasattr(node, 'tag_for_visit') and getattr(node, 'tag_for_visit') == self.visit_tag:
+        return
 
       x = getattr(self.visitor, 'visit_' + node.__class__.__name__, None)
       if x:
         x(node)
 
-      #TODO recursive
-      #self.visited.add(node)
+      node.tag_for_visit = self.visit_tag
 
       if self.do_not_cross_types:
         for dnct in self.do_not_cross_types:
@@ -891,30 +891,28 @@ class Compiler:
 
   def topo_struct_sort(self, structs):
     L = []
-    permanent = set()
-    temporary = set()
-    unmarked = set(s for s in structs)
 
     def visit(n):
-      if n in permanent:
+      if hasattr(n, 'topo_permanent'):
         return
-      if n in temporary:
+      if hasattr(n, 'topo_temporary'):
         self.error_at(n, 'recursive struct definition for "%s"' % n.name)
         return
 
-      temporary.add(n)
+      n.topo_temporary = True
 
       for mem in n.members:
         if isinstance(mem.type, last.Type) and isinstance(mem.type.base, last.Struct):
           visit(mem.type.base)
 
-      temporary.remove(n)
-      permanent.add(n)
+      del n.topo_temporary
+      n.topo_permanent = True
       L.append(n)
 
-    while unmarked:
-      n = unmarked.pop()
-      visit(n)
+    for s in structs:
+      if hasattr(s, 'topo_permanant'):
+        continue
+      visit(s)
 
     return L
 

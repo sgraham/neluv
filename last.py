@@ -199,9 +199,6 @@ class Struct(AstNode):
       self._cached_type = Type(self)
     return self._cached_type
 
-  def __hash__(self):
-    return hash(self.name)
-
 @dataclass
 class Union(AstNode):
   name: str
