@@ -108,7 +108,7 @@ star_expr: "*" expr
 ?term: factor (_mul_op factor)*
 ?factor: _unary_op factor | power
 
-!_unary_op: "+"|"-"|"~"|"&"
+!_unary_op: "+"|"-"|"~"|"&"|"*"
 !_add_op: "+"|"-"
 !_shift_op: "<<"|">>"
 !_mul_op: "*"|"@"|"/"|"%"|"//"
@@ -165,14 +165,8 @@ uniondef: "union" name ":" struct_union_types
 struct_union_types: typed_var _NEWLINE
                   | _NEWLINE _INDENT (typed_var _NEWLINE)+ _DEDENT
 
-arguments: argvalue ("," argvalue)*  ("," [ starargs | kwargs])?
-         | starargs
-         | kwargs
+arguments: argvalue ("," argvalue)*
          | comprehension{test}
-
-starargs: stararg ("," stararg)* ("," argvalue)* ["," kwargs]
-stararg: "*" test
-kwargs: "**" test ("," argvalue)*
 
 ?argvalue: test ("=" test)?
 

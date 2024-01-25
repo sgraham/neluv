@@ -1,0 +1,15 @@
+def main():
+  *int x = &y
+  f(*x)
+---
+TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
+                                     name='main',
+                                     params=[],
+                                     body=Block(entries=[VarDecl(type=PointerDecl(base=Type(base='i32')),
+                                                                 name='x',
+                                                                 init=UnaryExpr(op=Op(name='&'),
+                                                                                obj=Ident(name='y'))),
+                                                         FuncCall(func=Ident(name='f'),
+                                                                  args=[UnaryExpr(op=Op(name='*'),
+                                                                                  obj=Ident(name='x'))])]),
+                                     hidden=False)]))

@@ -735,6 +735,9 @@ class Compiler:
       # TODO: passing op right through
       return '(%s) %s (%s)' % (
           self.expr(node.chain[0]), node.chain[1].name, self.expr(node.chain[2]))
+    elif isinstance(node, last.UnaryExpr):
+      assert isinstance(node.op, last.Op) and node.op.name in ('&', '-', '+', '~', '*')
+      return node.op.name + '(' + self.expr(node.obj) + ')'
     elif isinstance(node, last.GetAttr):
       return self.expr(node.lhs) + '.' + node.rhs
     elif isinstance(node, last.FuncCall):
@@ -881,11 +884,11 @@ class Compiler:
       if i < len(obj.members) - 1:
         result += ','
     result += '){\n'
-    result += 'struct %s _ = {0};\n' % obj.name
+    result += 'struct %s $_ = {0};\n' % obj.name
     for field in obj.members:
       n = self.get_safe_c_name(field.name)
-      result += '_.%s = %s;\n' % (n, n)
-    result += 'return _;'
+      result += '$_.%s = %s;\n' % (n, n)
+    result += 'return $_;'
     result += '}\n'
     return result
 

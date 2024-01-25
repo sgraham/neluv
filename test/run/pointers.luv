@@ -1,0 +1,12 @@
+def main():
+  x = 11
+  y = 22
+  *int p = &x
+  *int q = &y
+  printint(*p)
+  printint(*p + 5)
+  printint(*p + *q)
+---
+11
+16
+33
