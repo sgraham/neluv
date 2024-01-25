@@ -1,4 +1,3 @@
-// Currently fails due to dyibicc bug apparently! (oops)
 struct A:
   int a
   B b
