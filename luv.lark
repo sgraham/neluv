@@ -30,6 +30,7 @@ assign_stmt: augassign | assign
                | "[" "]" var_decl_type -> slice_decl
                | "[" number "]" var_decl_type -> fixed_array_decl
                | "*" var_decl_type -> pointer_decl
+               | "?" var_decl_type -> optional_decl
                | funcdecl
 
 ?name_with_package: name_with_package "::" name
@@ -73,9 +74,10 @@ assert_stmt: "assert" test ["," test]
 
 ?compound_stmt: if_stmt | while_stmt | for_stmt | macro_with_block_stmt
               | with_stmt | funcdef | structdef | uniondef
-if_stmt: "if" test ":" suite elifs ["else" ":" suite]
+if_stmt: "if" (test | optional_unwrap) ":" suite elifs ["else" ":" suite]
+optional_unwrap: test "as" name
 elifs: elif_*
-elif_: "elif" test ":" suite
+elif_: "elif" (test | optional_unwrap) ":" suite
 while_stmt: "while" test ":" suite ["else" ":" suite]
 for_stmt: "for" [exprlist "in"] testlist ":" suite ["else" ":" suite]
 

@@ -1,0 +1,28 @@
+?int opt_x = 5
+?int opt_y = null
+
+def main():
+  if opt_x as x:
+    pass
+  elif opt_y as y:
+    pass
+  else:
+    pass
+---
+TopLevel(body=Block(entries=[VarDecl(type=OptionalDecl(base=Type(base='i32')),
+                                     name='opt_x',
+                                     init=Number(value=5)),
+                             VarDecl(type=OptionalDecl(base=Type(base='i32')),
+                                     name='opt_y',
+                                     init=Const(name='null')),
+                             FuncDef(rtype=Type(base='auto'),
+                                     name='main',
+                                     params=[],
+                                     body=Block(entries=[If(cond=OptionalUnwrap(optexpr=Ident(name='opt_x'),
+                                                                                bind='x'),
+                                                            body=Block(entries=[Pass()]),
+                                                            elifs=[Elif(cond=OptionalUnwrap(optexpr=Ident(name='opt_y'),
+                                                                                            bind='y'),
+                                                                        body=Block(entries=[Pass()]))],
+                                                            els=Block(entries=[Pass()]))]),
+                                     hidden=False)]))

@@ -243,6 +243,9 @@ class ToAst(Transformer):
   def pointer_decl(self, children):
     return last.PointerDecl(children[0])
 
+  def optional_decl(self, children):
+    return last.OptionalDecl(children[0])
+
   def type_for_var(self, children):
     return children[0]
 
@@ -279,6 +282,9 @@ class ToAst(Transformer):
 
   def elifs(self, children):
     return children
+
+  def optional_unwrap(self, children):
+    return last.OptionalUnwrap(children[0], children[1])
 
   def getitem(self, children):
     return last.GetItem(children[0], children[1])
@@ -811,6 +817,8 @@ class Compiler:
       return 'float'
     if isinstance(node, last.PointerDecl):
       return self.get_c_type(node.base) + '*'
+    if isinstance(node, last.OptionalDecl):
+      return self.get_c_type(node.base) + '/*Opt*/ *'
     if isinstance(node, last.Type):
       return self.get_c_type(node.base)
     if isinstance(node, last.Struct):
@@ -887,18 +895,31 @@ class Compiler:
       result += '}'
       return result
     elif isinstance(node, last.If):
-      result = 'if ('
-      result += self.expr(node.cond)
-      result += ')'
-      result += self.stmt(node.body)
+      if isinstance(node.cond, last.OptionalUnwrap):
+        result = 'if (%s) {' % self.expr(node.cond.optexpr)
+        opttype = self.expr_type(self.current_function, node.cond.optexpr)
+        assert isinstance(opttype, last.OptionalDecl)
+        result += '%s %s = *(%s);' % (
+            self.get_c_type(opttype.base), node.cond.bind, self.expr(node.cond.optexpr))
+        result += self.stmt(node.body)
+        result += '}'
+      else:
+        result = 'if ('
+        result += self.expr(node.cond)
+        result += ')'
+        result += self.stmt(node.body)
       for el in node.elifs:
         result += 'else if ('
         result += self.expr(el.cond)
         result += ')'
         result += self.stmt(el.body)
       if node.els:
+        result += 'else'
         result += self.stmt(node.els)
       return result
+    elif isinstance(node, last.For):
+      pprint.pprint(node)
+      pass
     elif isinstance(node, last.Return):
       result = 'return'
       if node.value:

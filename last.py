@@ -113,6 +113,10 @@ class PointerDecl(Type):
   pass
 
 @dataclass
+class OptionalDecl(Type):
+  pass
+
+@dataclass
 class MacroCallWithBlock(AstNode):
   func: FuncCall
   body: Block
@@ -147,6 +151,11 @@ class If(AstNode):
   body: Block
   elifs: list[Elif]
   els: Block
+
+@dataclass
+class OptionalUnwrap(AstNode):
+  optexpr: AstNode
+  bind: str
 
 @dataclass
 class TypedVar(AstNode):

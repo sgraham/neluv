@@ -7,6 +7,7 @@ syn case match
 
 " Keywords
 syn keyword     luvKeyword       and
+syn keyword     luvKeyword       as
 syn keyword     luvKeyword       block
 syn keyword     luvKeyword       break
 syn keyword     luvKeyword       check
@@ -38,6 +39,9 @@ syn keyword     luvType f16 f32 f64
 syn keyword     luvType str
 syn keyword     luvType void
 hi def link     luvType Type
+
+syn keyword     luvBuiltin range
+hi def link     luvBuiltin Function
 
 syn region	luvPreProc	start="^\s*\zs\%(%:\|#\)" skip="\\$" end="$" keepend contains=ALLBUT,@Spell
 syn region	luvPreProc	start="\%(%:\|#\){" end="}" keepend contains=ALLBUT,@Spell,luvPreProc

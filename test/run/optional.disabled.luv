@@ -1,0 +1,14 @@
+def printit(?int opt):
+  if opt as n:
+    printint(n)
+  else:
+    printint(-1)
+
+def main():
+  ?int x = 5
+  ?int y = null
+  printit(x)
+  printit(y)
+---
+5
+-1
