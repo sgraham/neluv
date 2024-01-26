@@ -1,0 +1,24 @@
+def f(*int x):
+  pass
+
+struct A:
+  int x
+
+def g(*A a):
+  pass
+---
+TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
+                                     name='f',
+                                     params=[TypedVar(type=PointerDecl(base=Type(base='i32')),
+                                                      name='x')],
+                                     body=Block(entries=[Pass()]),
+                                     hidden=False),
+                             Struct(name='A',
+                                    members=[TypedVar(type=Type(base='i32'),
+                                                      name='x')]),
+                             FuncDef(rtype=Type(base='auto'),
+                                     name='g',
+                                     params=[TypedVar(type=PointerDecl(base=Ident(name='A')),
+                                                      name='a')],
+                                     body=Block(entries=[Pass()]),
+                                     hidden=False)]))

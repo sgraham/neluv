@@ -1,0 +1,11 @@
+struct X:
+  *int ptr
+  *int ptr2
+
+def main():
+  a = 123
+  x = X(&a, null)
+  x.ptr2 = x.ptr
+  printint(*x.ptr + *x.ptr2)
+---
+246

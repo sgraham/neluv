@@ -517,6 +517,10 @@ class Compiler:
         self.insert_global_or_error(x)
 
     # Resolve idents in structs to point at other structs (TODO: should this be here?)
+    # XXX this is ugly
+    # XXX doesn't handle nested types either
+    # XXX probably needs to be elsewhere so that function auto return are
+    # already resolved too
     for n,ste in self.globals.items():
       obj = ste.ref_node
       if isinstance(obj, last.Struct):
@@ -526,6 +530,17 @@ class Compiler:
             # TODO: more lax probably
             if resolved.ref_node and isinstance(resolved.ref_node, last.Struct):
               f.type = resolved.ref_node.cached_type()
+      if isinstance(obj, last.FuncDef):
+        if isinstance(obj.rtype, last.Ident):
+          resolved = self.globals.get(obj.rtype.name)
+          if resolved.ref_node and isinstance(resolved.ref_node, last.Struct):
+            obj.rtype = resolved.ref_node.cached_type()
+        for p in obj.params:
+          assert isinstance(p, last.TypedVar)
+          if isinstance(p.type, last.Ident):
+            resolved = self.globals.get(p.type.name)
+            if resolved.ref_node and isinstance(resolved.ref_node, last.Struct):
+              p.type = resolved.ref_node.cached_type()
 
   def find_func_defs(self, start, top_level_only=False):
     class FindFuncDef:
@@ -728,6 +743,8 @@ class Compiler:
         return '(/*false*/0)'
       elif node.name == 'true':
         return '(/*true*/1)'
+      elif node.name == 'null':
+        return '(/*null*/(void*)0)'
       else:
         assert False, "unhandled Const %s" % node
     elif isinstance(node, last.CompExpr):

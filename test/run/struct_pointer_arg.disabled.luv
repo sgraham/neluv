@@ -1,0 +1,11 @@
+struct A:
+  int x
+
+def f(*A pa):
+  printint(pa.x + 1)
+
+def main():
+  a = A(11)
+  f(&a)
+---
+12

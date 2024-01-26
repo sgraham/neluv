@@ -7,7 +7,7 @@ funcdef: "def" [returntype] name "(" [parameters] ")" ":" suite
 
 parameters: paramvalue ("," paramvalue)* ","?
 ?paramvalue: typedparam ("=" test)?
-?typedparam: test name
+?typedparam: typed_var
 
 
 lambdef: "lambda" [lambda_params] ":" test
