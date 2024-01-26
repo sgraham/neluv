@@ -1,0 +1,6 @@
+def main():
+  a = 3
+  a = false
+---
+!
+test/type/type_conflict_locals.luv:3:3:previously typed as "Type(base='i32')", now "Type(base='bool')"

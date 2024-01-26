@@ -109,17 +109,13 @@ _MACROS = {}
 _KEYWORDS = {
   'auto': last.Type('auto'),
   'bool': last.Type('bool'),
-  'byte': last.Type('u8'),
-  'double': last.Type('f64'),
   'f16': last.Type('f16'),
   'f32': last.Type('f32'),
   'f64': last.Type('f64'),
-  'float': last.Type('f32'),
   'i16': last.Type('i16'),
   'i32': last.Type('i32'),
   'i64': last.Type('i64'),
   'i8': last.Type('i8'),
-  'int': last.Type('i32'),
   'u16': last.Type('u16'),
   'u32': last.Type('u32'),
   'u64': last.Type('u64'),
@@ -130,6 +126,11 @@ _KEYWORDS = {
   'null': last.Const('null'),
   'true': last.Const('true'),
 }
+
+_KEYWORDS['byte'] = _KEYWORDS['u8']
+_KEYWORDS['double'] = _KEYWORDS['f64']
+_KEYWORDS['float'] = _KEYWORDS['f32']
+_KEYWORDS['int'] = _KEYWORDS['i32']
 
 visit_tag_counter = 0
 
@@ -400,6 +401,7 @@ class Compiler:
     self.find_globals()
     self.build_function_symtabs()
     self.hoist_nested_functions()
+    self.resolve_idents()
     self.infer_types()
 
     self.current_function = None
@@ -431,7 +433,7 @@ class Compiler:
         x = self.func.symtab.get(node.lhs.name)
         if not x:
           self.func.symtab[node.lhs.name] = last.SymTabEntry(
-              self.parent.expr_type(self.func, node.rhs), node, is_declared_local=True)
+              _KEYWORDS['auto'], node, is_declared_local=True)
         elif x.is_pending_nonlocal and self.parent.is_lexically_before(node, x.ref_node):
           self.parent.error_at(node,
               'name "%s" is used before nonlocal declaration' % node.lhs.name)
@@ -465,14 +467,15 @@ class Compiler:
         return
 
       x = getattr(self.visitor, 'visit_' + node.__class__.__name__, None)
-      if x:
-        x(node)
+      if x: x(node)
 
       node.tag_for_visit = self.visit_tag
 
       if self.do_not_cross_types:
         for dnct in self.do_not_cross_types:
           if isinstance(node, dnct):
+            x = getattr(self.visitor, 'after_' + node.__class__.__name__, None)
+            if x: x(node)
             return
 
       for f in dataclasses.fields(node):
@@ -484,6 +487,10 @@ class Compiler:
           for lx in field:
             if isinstance(lx, last.AstNode):
               self.impl(lx)
+
+      x = getattr(self.visitor, 'after_' + node.__class__.__name__, None)
+      if x: x(node)
+      return
 
   def insert_global_or_error(self, node):
     name = node.name
@@ -587,7 +594,8 @@ class Compiler:
         if in_upper:
           if f != func:
             #print('upval req for %s of %s, found in %s' % (i, func.name, f.name))
-            ste = last.SymTabEntry(in_upper.type, in_upper.ref_node, is_upval=True)
+            ste = last.SymTabEntry(
+                in_upper.type, in_upper.ref_node, is_upval=True, func_ref_if_upval=f)
             func.symtab[i] = ste
             to_bind[i] = ste
             pending_non_local = pending_non_local_name = None
@@ -633,7 +641,12 @@ class Compiler:
           # replacing calls to it.
           cur.body.entries.remove(nested)  # TODO: prob unnecessary O(n)
           self.add_to_toplevel.append(nested)
+          # TODO: this is probably wrong/too simple; at least need to have
+          # something to deal with a local declared with the same name as a
+          # function.
           self.parent.replace_ident_references(cur.body, old_name, new_name)
+          cur.symtab[new_name] = last.SymTabEntry(
+              _KEYWORDS['auto'], nested, is_declared_local=True, is_hoisted_function=True)
           #pprint.pprint(cur_func)
 
         self.cur_func_stack.append(nested)
@@ -645,10 +658,70 @@ class Compiler:
     h.hoist(self.ast_root)
 
     assert isinstance(self.ast_root, last.TopLevel)
-    self.ast_root.body.entries = h.add_to_toplevel + self.ast_root.body.entries
+    # TODO: test/run/nested_func_ref_up_double.luv (e.g.) depends on the hoisted
+    # functions being appended rather than prepended because a later walk to
+    # resolve upvals relies on the outer function types being resolved before
+    # walking the nested functions which allows upval types to be found. This is
+    # pretty fragile.
+    self.ast_root.body.entries = self.ast_root.body.entries + h.add_to_toplevel
     for tl in h.add_to_toplevel:
       tl.hidden = True
       self.insert_global_or_error(tl)
+
+  class ResolveIdents:
+    def __init__(self, parent):
+      self.cur_func = None
+      self.parent = parent
+
+    def visit_FuncDef(self, func):
+      assert not self.cur_func
+      self.cur_func = func
+
+    def resolve_ident(self, ident, expr_to_type):
+      found = self.parent.expr_type(self.cur_func, expr_to_type)
+      x = self.cur_func.symtab.get(ident.name)
+      assert x, "ident not in scope? '%s'" % ident.name
+      if x.type == _KEYWORDS['auto']:
+        x.type = found
+      else:
+        if x.type != found:
+          self.parent.error_at(ident, 'previously typed as "%s", now "%s"' % (x.type, found))
+
+    def visit_Assign(self, assign):
+      if isinstance(assign.lhs, last.Ident):
+        self.resolve_ident(assign.lhs, assign.rhs)
+
+    #def visit_Ident(self, ident):
+      #x = self.cur_func.symtab.get(ident.name)
+      #assert x, "ident not in scope? '%s'" % ident.name
+      #print('VISIT_IDENT', x)
+      #x.type = self.parent.expr_type(self.cur_func, x.ref_node)
+      #print('GENERAL IDENT REF', ident.name, 'NOW', x.type)
+
+    def after_FuncDef(self, func):
+      assert self.cur_func == func
+      for nested_name, uvb in func.upval_bindings.items():
+        # Resolving references to upvals that were previously untyped
+        # (|x| in test/run/nested_func_ref_up.luv)
+        for ident, ste in uvb.to_bind.items():
+          assert ste.is_upval and ste.func_ref_if_upval
+          if ste.type is _KEYWORDS['auto']:
+            ste.type = ste.func_ref_if_upval.symtab[ident].type
+
+            # And also the members of the upval structure
+            # (|y| in test/run/nested_func_ref_up_double.luv).
+            for mem in uvb.struct.members:
+              if mem.name == ident:
+                mem.type = ste.type
+
+      self.cur_func = None
+
+    def visit_Struct(self, struct):
+      pass
+
+  def resolve_idents(self):
+    resolver = self.ResolveIdents(self)
+    self.Visit(resolver, self.ast_root)
 
   def find_return_stmts(self, func):
     class FindReturns:
@@ -663,6 +736,10 @@ class Compiler:
       return _KEYWORDS['void']
     elif isinstance(expr, last.Number):
       return _KEYWORDS['i32']  # XXX all number types
+    elif isinstance(expr, last.Const) and expr.name == 'true':
+      return _KEYWORDS['bool']
+    elif isinstance(expr, last.Const) and expr.name == 'false':
+      return _KEYWORDS['bool']
     elif isinstance(expr, last.FuncCall):
       if isinstance(expr.func, last.Ident):
         ste_in_globals = self.globals.get(expr.func.name)
@@ -851,7 +928,7 @@ class Compiler:
     self.current_function = func
     result += '{'
     for n, ste in func.symtab.items():
-      if ste.is_declared_local:
+      if ste.is_declared_local and not ste.is_hoisted_function:
         if ste.type is _KEYWORDS['void']:
           self.error_at(ste.ref_node, 'can\'t declare local of type "%s"' % ste.type.base)
         result += '%(type)s %(name)s = (%(type)s){0};' % {

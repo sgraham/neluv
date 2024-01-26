@@ -67,6 +67,8 @@ class SymTabEntry:  # Not AstNode
   is_upval: bool = False
   is_global: bool = False
   is_pending_nonlocal: bool = False
+  is_hoisted_function: bool = False
+  func_ref_if_upval: AstNode = None
 
 upval_binding_counter = 0
 class UpvalBindings:  # Not AstNode

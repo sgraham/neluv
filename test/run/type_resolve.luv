@@ -1,0 +1,10 @@
+struct A:
+  int x
+
+def main():
+  def A(int x):
+    return 4
+  a = A(1)  // Should be local function, not struct constructor
+  printint(a)
+---
+4
