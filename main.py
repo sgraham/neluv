@@ -746,7 +746,10 @@ class Compiler:
         in_globals = ste_in_globals.ref_node
         if isinstance(in_globals, last.FuncDef):
           if in_globals.rtype is _KEYWORDS['auto']:
-            self.get_function_return_type(in_globals)
+            if not self.resolve_function_return_type(in_globals):
+              # TODO: Returning None for recursive resolve_function_return_type()
+              # seems dicey for general users of this function.
+              return None
           return in_globals.rtype
         elif isinstance(in_globals, last.Struct):
           return in_globals.cached_type()
@@ -762,22 +765,35 @@ class Compiler:
         return _KEYWORDS['i32']
     assert False, "unhandled expr_type %s" % expr
 
-  def get_function_return_type(self, fd):
-    return_type = None
+  def resolve_function_return_type(self, fd):
+    if getattr(fd, 'resolving_return_type', None):
+      return False
+    setattr(fd, 'resolving_return_type', True)
     returns = self.find_return_stmts(fd.body)
-    for r in returns:
-      this_type = self.expr_type(fd, r.value)
-      if return_type is None:
-        return_type = this_type
-      elif return_type != this_type:
-        self.error_at(r, 'returning "%s", previously "%s"' % (this_type, return_type))
-    fd.rtype = return_type or _KEYWORDS['void']
+    if not returns:
+      fd.rtype = _KEYWORDS['void']
+    else:
+      auto = _KEYWORDS['auto']
+      return_type = auto
+      for r in returns:
+        this_type = self.expr_type(fd, r.value)
+        if this_type is None:
+          continue # Recursive function (e.g. test/run/type_resolve_params.luv)
+        if return_type is auto:
+          return_type = this_type
+        elif return_type != this_type:
+          self.error_at(r, 'returning "%s", previously "%s"' % (this_type, return_type))
+      fd.rtype = return_type or _KEYWORDS['void']
+    delattr(fd, 'resolving_return_type')
+    return True
 
   def determine_all_auto_function_returns(self):
     func_defs = self.find_func_defs(self.ast_root)
     for fd in func_defs:
       if fd.rtype is _KEYWORDS['auto']:
-        self.get_function_return_type(fd)
+        ret = self.resolve_function_return_type(fd)
+        if not ret or fd.rtype is _KEYWORDS['auto']:
+          self.error_at(fd, 'couldn\'t resolve return type for "%s"' % fd.name)
 
   def infer_types(self):
     self.determine_all_auto_function_returns()

@@ -1,0 +1,9 @@
+def f(int p):
+  if p == 0:
+    return 999
+  return f(p - 1)
+
+def main():
+  printint(f(3))
+---
+999

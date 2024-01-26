@@ -1,0 +1,5 @@
+def f(int x):
+  return f(x-1)
+---
+!
+test/type/type_resolve_all_recursive.luv:1:1:couldn't resolve return type for "f"

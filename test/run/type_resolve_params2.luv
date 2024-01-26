@@ -1,0 +1,6 @@
+def f(int p, bool q):
+  return p
+def main():
+  printint(f(34, false))
+---
+34
