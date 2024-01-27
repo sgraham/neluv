@@ -9,6 +9,12 @@ def main():
   ?int y = null
   printit(x)
   printit(y)
+  y = 44
+  printit(y)
+  x = null
+  printit(x)
 ---
 5
+-1
+44
 -1

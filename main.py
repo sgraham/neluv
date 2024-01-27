@@ -403,12 +403,17 @@ class Compiler:
       sys.exit(1)
     self.error_at = error_at or default_error_at
 
+    self.optional_structs = {}
+
     self.ast_root = ast_root
     self.find_globals()
     self.build_function_symtabs()
     self.hoist_nested_functions()
     self.resolve_idents()
     self.infer_types()
+
+    for contained, (od, struct) in self.optional_structs.items():
+      self.globals[struct.name] = last.SymTabEntry(od, struct)
 
     self.current_function = None
 
@@ -687,15 +692,31 @@ class Compiler:
       found = self.parent.expr_type(self.cur_func, expr_to_type)
       x = self.cur_func.symtab.get(ident.name)
       assert x, "ident not in scope? '%s'" % ident.name
-      if x.type == _KEYWORDS['auto']:
+      if x.type is _KEYWORDS['auto']:
         x.type = found
       else:
         if x.type != found:
-          self.parent.error_at(ident, 'previously typed as "%s", now "%s"' % (x.type, found))
+          if (isinstance(x.type, last.OptionalDecl) and
+              (x.type.base is found or found is _KEYWORDS['null'])):
+            # Allow coercion from contained type of optional to the optional,
+            # or from null to any optional.
+            pass
+          else:
+            self.parent.error_at(ident, 'previously typed as "%s", now "%s"' % (x.type, found))
 
     def visit_Assign(self, assign):
       if isinstance(assign.lhs, last.Ident):
         self.resolve_ident(assign.lhs, assign.rhs)
+
+    def visit_OptionalDecl(self, od):
+      c_base_type_name = self.parent.get_c_type(od.base)
+      if c_base_type_name not in self.parent.optional_structs:
+        opt_struct_name = '$Opt$' + c_base_type_name
+        members = [last.TypedVar(_KEYWORDS['bool'], 'has'),
+                   last.TypedVar(od.base, 'val')]
+        struct = last.Struct(opt_struct_name, members)
+        struct.omit_constructor = True
+        self.parent.optional_structs[c_base_type_name] = (od, struct)
 
     #def visit_Ident(self, ident):
       #x = self.cur_func.symtab.get(ident.name)
@@ -746,6 +767,9 @@ class Compiler:
       return _KEYWORDS['bool']
     elif isinstance(expr, last.Const) and expr.name == 'false':
       return _KEYWORDS['bool']
+    elif isinstance(expr, last.Const) and expr.name == 'null':
+      # Type of null is itself? Not sure.
+      return _KEYWORDS['null']
     elif isinstance(expr, last.FuncCall):
       if isinstance(expr.func, last.Ident):
         ste_in_globals = self.globals.get(expr.func.name)
@@ -769,6 +793,15 @@ class Compiler:
           self.expr_type(funcdef, expr.chain[2]) is _KEYWORDS['i32']):
         # HACK HACK HACK
         return _KEYWORDS['i32']
+    elif isinstance(expr, last.GetAttr):
+      lhs = self.expr_type(funcdef, expr.lhs)
+      assert isinstance(lhs, last.Type) and isinstance(lhs.base, last.Struct)
+      for x in lhs.base.members:
+        if x.name == expr.rhs:
+          return x.type
+      else:
+        assert '%s not found on %s' % (expr.rhs, lhs.base)
+      pass
     assert False, "unhandled expr_type %s" % expr
 
   def resolve_function_return_type(self, fd):
@@ -818,7 +851,7 @@ class Compiler:
     if isinstance(node, last.PointerDecl):
       return self.get_c_type(node.base) + '*'
     if isinstance(node, last.OptionalDecl):
-      return self.get_c_type(node.base) + '/*Opt*/ *'
+      return 'struct ' + self.optional_structs[self.get_c_type(node.base)][1].name
     if isinstance(node, last.Type):
       return self.get_c_type(node.base)
     if isinstance(node, last.Struct):
@@ -896,10 +929,10 @@ class Compiler:
       return result
     elif isinstance(node, last.If):
       if isinstance(node.cond, last.OptionalUnwrap):
-        result = 'if (%s) {' % self.expr(node.cond.optexpr)
+        result = 'if ((%s).has) {' % self.expr(node.cond.optexpr)
         opttype = self.expr_type(self.current_function, node.cond.optexpr)
         assert isinstance(opttype, last.OptionalDecl)
-        result += '%s %s = *(%s);' % (
+        result += '%s %s = (%s).val;' % (
             self.get_c_type(opttype.base), node.cond.bind, self.expr(node.cond.optexpr))
         result += self.stmt(node.body)
         result += '}'
@@ -931,10 +964,28 @@ class Compiler:
     elif isinstance(node, last.Nonlocal):
       return ''
     elif isinstance(node, last.Assign):
-      return '%s = %s;' % (self.expr(node.lhs), self.expr(node.rhs))
+      lhs_type = self.expr_type(self.current_function, node.lhs)
+      lhs = self.expr(node.lhs)
+      rhs = self.expr(node.rhs)
+      if isinstance(lhs_type, last.OptionalDecl):
+        if isinstance(node.rhs, last.Const) and node.rhs.name == 'null':
+          return '%s = (%s){/*has*/0};' % (lhs, self.get_c_type(lhs_type))
+        else:
+          return '%s = (%s){/*has*/1,/*val*/%s};' % (lhs, self.get_c_type(lhs_type), rhs)
+      else:
+        return '%s = %s;' % (lhs, rhs)
     elif isinstance(node, last.VarDecl):
       if node.init:
-        return '%s = %s;' % (self.get_safe_c_name(node.name), self.expr(node.init))
+        rhs = self.expr(node.init)
+        lhs = self.get_safe_c_name(node.name)
+        lhs_type = self.get_c_type(node.type)
+        if isinstance(node.type, last.OptionalDecl):
+          if isinstance(node.init, last.Const) and node.init.name == 'null':
+            return '%s = (%s){/*has*/0};' % (lhs, lhs_type)
+          else:
+            return '%s = (%s){/*has*/1,/*val*/%s};' % (lhs, lhs_type, rhs)
+        else:
+          return '%s = %s;' % (lhs, rhs)
       else:
         return ''
     elif isinstance(node, last.FuncDef):
@@ -1009,6 +1060,8 @@ class Compiler:
 
   def generate_struct_constructor(self, obj):
     assert isinstance(obj, last.Struct)
+    if obj.omit_constructor:
+      return ''
     result = '\nstruct %s %s(' % (obj.name, obj.name)
     for i,field in enumerate(obj.members):
       result += '%s %s' % (self.get_c_type(field.type), self.get_safe_c_name(field.name))
