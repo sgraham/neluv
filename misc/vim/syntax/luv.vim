@@ -40,7 +40,7 @@ syn keyword     luvType str
 syn keyword     luvType void
 hi def link     luvType Type
 
-syn keyword     luvBuiltin range
+syn keyword     luvBuiltin range iter next
 hi def link     luvBuiltin Function
 
 syn region	luvPreProc	start="^\s*\zs\%(%:\|#\)" skip="\\$" end="$" keepend contains=ALLBUT,@Spell
