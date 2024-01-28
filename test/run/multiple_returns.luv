@@ -1,0 +1,10 @@
+def mret():
+  return 11, 12
+
+def main():
+  x, y = mret()
+  printint(x)
+  printint(y)
+---
+11
+12

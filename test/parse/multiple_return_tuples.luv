@@ -1,0 +1,20 @@
+def mret():
+  return 11, 12
+
+def main():
+  x, y = mret()
+---
+TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
+                                     name='mret',
+                                     params=[],
+                                     body=Block(entries=[Return(value=TupleCreate(values=[Number(value=11),
+                                                                                          Number(value=12)]))]),
+                                     hidden=False),
+                             FuncDef(rtype=Type(base='auto'),
+                                     name='main',
+                                     params=[],
+                                     body=Block(entries=[Assign(lhs=TupleAssign(targets=[Ident(name='x'),
+                                                                                         Ident(name='y')]),
+                                                                rhs=FuncCall(func=Ident(name='mret'),
+                                                                             args=[]))]),
+                                     hidden=False)]))

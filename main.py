@@ -133,6 +133,7 @@ _KEYWORDS['float'] = _KEYWORDS['f32']
 _KEYWORDS['int'] = _KEYWORDS['i32']
 
 visit_tag_counter = 0
+tmp_var_counter = 0
 
 def load_builtin_macros():
   for x in ["print"]:
@@ -208,6 +209,12 @@ class ToAst(Transformer):
     for i in range(len(children) - 2, -1, -1):
       cur = last.PackageReference(children[i], cur)
     return cur
+
+  def testlist_tuple(self, children):
+    return last.TupleCreate(children)
+
+  def tuple(self, children):
+    return last.TupleAssign(children)
 
   def getattr(self, children):
     return last.GetAttr(children[0], children[1])
@@ -395,15 +402,24 @@ class Typer:
     pass
 
 class Compiler:
-  def __init__(self, filename, ast_root, error_at=None):
+  def __init__(self, filename, ast_root, error_callback=None):
     self.globals = {}  # values are SymTabEntry
     self.filename = filename
+
     def default_error_at(node, msg):
       print('%s:%d:%d:error: %s' % (self.filename, node.line, node.column, msg), file=sys.stderr)
       sys.exit(1)
-    self.error_at = error_at or default_error_at
+
+    def flag_error_and_tell_user(node, msg):
+      self.have_error = True
+      self.error_callback(node, msg)
+
+    self.have_error = False
+    self.error_callback = error_callback or default_error_at
+    self.error_at = flag_error_and_tell_user
 
     self.optional_structs = {}
+    self.tuple_structs = {}
 
     self.ast_root = ast_root
     self.find_globals()
@@ -413,6 +429,9 @@ class Compiler:
     self.infer_types()
 
     for contained, (od, struct) in self.optional_structs.items():
+      self.globals[struct.name] = last.SymTabEntry(od, struct)
+
+    for contained, (od, struct) in self.tuple_structs.items():
       self.globals[struct.name] = last.SymTabEntry(od, struct)
 
     self.current_function = None
@@ -440,14 +459,20 @@ class Compiler:
       self.func.symtab[node.name] = last.SymTabEntry(node.type, node, is_declared_local=True)
 
     def visit_Assign(self, node):
-      if isinstance(node.lhs, last.Ident):  # TODO: Is this sufficient?
-        x = self.func.symtab.get(node.lhs.name)
+      def local(ident):
+        x = self.func.symtab.get(ident.name)
         if not x:
-          self.func.symtab[node.lhs.name] = last.SymTabEntry(
-              _KEYWORDS['auto'], node, is_declared_local=True)
-        elif x.is_pending_nonlocal and self.parent.is_lexically_before(node, x.ref_node):
-          self.parent.error_at(node,
-              'name "%s" is used before nonlocal declaration' % node.lhs.name)
+          self.func.symtab[ident.name] = last.SymTabEntry(
+              _KEYWORDS['auto'], ident, is_declared_local=True)
+        elif x.is_pending_nonlocal and self.parent.is_lexically_before(ident, x.ref_node):
+          self.parent.error_at(ident,
+              'name "%s" is used before nonlocal declaration' % ident.name)
+      if isinstance(node.lhs, last.Ident):
+        local(node.lhs)
+      elif isinstance(node.lhs, last.TupleAssign):
+        if all(isinstance(x, last.Ident) for x in node.lhs.targets):
+          for x in node.lhs.targets:
+            local(x)
 
   class ScanForNonlocal:
     def __init__(self, func, parent):
@@ -533,6 +558,7 @@ class Compiler:
         x.copy_meta(tl)
         self.ast_root.body.entries[i] = x
         self.insert_global_or_error(x)
+      # TODO: multiple return tuple assignments
 
     # Resolve idents in structs to point at other structs (TODO: should this be here?)
     # XXX this is ugly
@@ -688,8 +714,10 @@ class Compiler:
       assert not self.cur_func
       self.cur_func = func
 
-    def resolve_ident(self, ident, expr_to_type):
+    def resolve_ident(self, ident, expr_to_type, tuple_index):
       found = self.parent.expr_type(self.cur_func, expr_to_type)
+      if tuple_index is not None:
+        found = found.members[tuple_index].type
       x = self.cur_func.symtab.get(ident.name)
       assert x, "ident not in scope? '%s'" % ident.name
       if x.type is _KEYWORDS['auto']:
@@ -706,7 +734,11 @@ class Compiler:
 
     def visit_Assign(self, assign):
       if isinstance(assign.lhs, last.Ident):
-        self.resolve_ident(assign.lhs, assign.rhs)
+        self.resolve_ident(assign.lhs, assign.rhs, tuple_index=None)
+      elif isinstance(assign.lhs, last.TupleAssign):
+        assert all(isinstance(x, last.Ident) for x in assign.lhs.targets)
+        for i,x in enumerate(assign.lhs.targets):
+          self.resolve_ident(x, assign.rhs, tuple_index=i)
 
     def visit_OptionalDecl(self, od):
       c_base_type_name = self.parent.get_c_type(od.base)
@@ -717,6 +749,15 @@ class Compiler:
         struct = last.Struct(opt_struct_name, members)
         struct.omit_constructor = True
         self.parent.optional_structs[c_base_type_name] = (od, struct)
+
+    def visit_TupleCreate(self, tc):
+      field_types = [self.parent.expr_type(self.cur_func, v) for v in tc.values]
+      c_name_field_types = [self.parent.get_c_type(t) for t in field_types]
+      members = [last.TypedVar(t, '_%d' % i) for i,t in enumerate(field_types)]
+      name = '$Tuple$' + '$'.join(str(x) for x in c_name_field_types)
+      struct = last.Struct(name, members)
+      struct.omit_constructor = True
+      self.parent.tuple_structs[name] = (tc, struct)
 
     #def visit_Ident(self, ident):
       #x = self.cur_func.symtab.get(ident.name)
@@ -757,6 +798,15 @@ class Compiler:
     finder = FindReturns()
     self.Visit(finder, func, do_not_cross_types=[last.FuncDef])
     return finder.result
+
+  def tuple_struct_for_types(self, field_types):
+    c_name_field_types = [self.get_c_type(t) for t in field_types]
+    name = '$Tuple$' + '$'.join(str(x) for x in c_name_field_types)
+    return self.tuple_structs[name][1]
+
+  def tuple_struct_for_values(self, func, values):
+    field_types = [self.expr_type(func, v) for v in values]
+    return self.tuple_struct_for_types(field_types)
 
   def expr_type(self, funcdef, expr):
     if expr is None:
@@ -802,6 +852,10 @@ class Compiler:
       else:
         assert '%s not found on %s' % (expr.rhs, lhs.base)
       pass
+    elif isinstance(expr, last.TupleCreate):
+      return self.tuple_struct_for_values(funcdef, expr.values)
+    elif isinstance(expr, last.TupleAssign):
+      return '/*TUPLE ASSIGN TYPE*/'
     assert False, "unhandled expr_type %s" % expr
 
   def resolve_function_return_type(self, fd):
@@ -838,6 +892,7 @@ class Compiler:
     self.determine_all_auto_function_returns()
 
   def get_c_type(self, node):
+    assert node is not _KEYWORDS['auto']
     if node == _KEYWORDS['i32']:
       return 'int32_t'
     if node == _KEYWORDS['u32']:
@@ -852,12 +907,12 @@ class Compiler:
       return self.get_c_type(node.base) + '*'
     if isinstance(node, last.OptionalDecl):
       return 'struct ' + self.optional_structs[self.get_c_type(node.base)][1].name
-    if isinstance(node, last.Type):
-      return self.get_c_type(node.base)
     if isinstance(node, last.Struct):
       return 'struct ' + node.name
+    if isinstance(node, last.Type):
+      return self.get_c_type(node.base)
     print('GET_C_TYPE', node)
-    return '???'
+    return '??/*%s*/' % node
 
   def get_safe_c_name(self, luv_name):
     # TODO
@@ -917,6 +972,11 @@ class Compiler:
           # TODO: passing op right through
           result += x.name
       return result
+    elif isinstance(node, last.TupleCreate):
+      struct = self.tuple_struct_for_values(self.current_function, node.values)
+      return '(struct %s){' % struct.name + ','.join(self.expr(v) for v in node.values) + '}'
+    elif isinstance(node, last.TupleAssign):
+      return '/*TupleAssign, should be handled in stmt() Assign?*/'
     else:
       raise RuntimeError("unhandled expr node %s" % node)
 
@@ -964,16 +1024,29 @@ class Compiler:
     elif isinstance(node, last.Nonlocal):
       return ''
     elif isinstance(node, last.Assign):
-      lhs_type = self.expr_type(self.current_function, node.lhs)
-      lhs = self.expr(node.lhs)
-      rhs = self.expr(node.rhs)
-      if isinstance(lhs_type, last.OptionalDecl):
-        if isinstance(node.rhs, last.Const) and node.rhs.name == 'null':
-          return '%s = (%s){/*has*/0};' % (lhs, self.get_c_type(lhs_type))
-        else:
-          return '%s = (%s){/*has*/1,/*val*/%s};' % (lhs, self.get_c_type(lhs_type), rhs)
+      if isinstance(node.lhs, last.TupleAssign):
+        assert all(isinstance(x, last.Ident) for x in node.lhs.targets)
+        rhs_type = self.expr_type(self.current_function, node.rhs)
+        field_types = [x.type for x in rhs_type.members]
+        struct = self.tuple_struct_for_types(field_types)
+        global tmp_var_counter
+        tmp_var_counter += 1
+        tmp = '$%d' % tmp_var_counter
+        result = 'struct %s %s = %s;\n' % (struct.name, tmp, self.expr(node.rhs))
+        for i, x in enumerate(node.lhs.targets):
+          result += '%s = %s._%d;' % (x.name, tmp, i)
+        return result
       else:
-        return '%s = %s;' % (lhs, rhs)
+        lhs_type = self.expr_type(self.current_function, node.lhs)
+        lhs = self.expr(node.lhs)
+        rhs = self.expr(node.rhs)
+        if isinstance(lhs_type, last.OptionalDecl):
+          if isinstance(node.rhs, last.Const) and node.rhs.name == 'null':
+            return '%s = (%s){/*has*/0};' % (lhs, self.get_c_type(lhs_type))
+          else:
+            return '%s = (%s){/*has*/1,/*val*/%s};' % (lhs, self.get_c_type(lhs_type), rhs)
+        else:
+          return '%s = %s;' % (lhs, rhs)
     elif isinstance(node, last.VarDecl):
       if node.init:
         rhs = self.expr(node.init)
@@ -1129,9 +1202,13 @@ static void printbool(_Bool x) {
       for obj in sorted_structs:
         f.write(self.generate_struct(obj))
 
+      if self.have_error: return
+
       header('struct constructors')
       for obj in sorted_structs:
         f.write(self.generate_struct_constructor(obj))
+
+      if self.have_error: return
 
       header('upval structs')
       for n,ste in self.globals.items():
@@ -1139,12 +1216,16 @@ static void printbool(_Bool x) {
         if isinstance(obj, last.FuncDef):
           f.write(self.generate_upval_struct(obj))
 
+      if self.have_error: return
+
       header('function forward decls')
       for n,ste in self.globals.items():
         obj = ste.ref_node
         if isinstance(obj, last.FuncDef):
           f.write(self.function_forward_declaration(obj))
           f.write(';\n')
+
+      if self.have_error: return
 
       header('globals')
       for n,ste in self.globals.items():
@@ -1164,6 +1245,8 @@ static void printbool(_Bool x) {
         obj = ste.ref_node
         if isinstance(obj, last.FuncDef):
           f.write(self.function_definition(obj))
+
+      if self.have_error: return
 
     subprocess.run(['clang-format', '-i', outfn, '-style=Chromium'])
 
@@ -1207,7 +1290,7 @@ def do_tests(parser, test_list, update):
   disabled_list = []
   passed_list = []
   err = None
-  def tt_error_at(node, msg):
+  def tt_error_callback(node, msg):
     nonlocal err
     if err: return
     err = (node, msg)
@@ -1227,7 +1310,7 @@ def do_tests(parser, test_list, update):
       got = pprint.pformat(ast)
     elif t.startswith('test/type'):
       err = None
-      c = Compiler(t, ast, error_at=tt_error_at)
+      c = Compiler(t, ast, error_callback=tt_error_callback)
       c_file = os.path.splitext(t)[0] + '.c'
       c.compile(c_file)
       got = '!\n%s:%d:%d:%s' % (t, err[0].line, err[0].column, err[1])
