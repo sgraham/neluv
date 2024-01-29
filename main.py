@@ -10,6 +10,43 @@ import sys
 from lark import Lark, Tree, Transformer, v_args, UnexpectedToken, logger, Visitor
 from lark.indenter import PythonIndenter
 
+'''
+How do to a string type?
+
+- Scan stack and heap conservatively for pointers into StrPool arena
+- Add required registration of Str objects (to include an intrusive pointer
+into them)
+- Make non-memcpy-able; incref decref, etc.
+- Make non-alias-able; semantics require a (deep) copy every time
+  - basically non-memcpy-able? some sort of storage holder for intern'd
+  strings?
+- Completely C-like, so manual init/copy/free required
+- non-memcpy-able is probably fine for direct usages of `str`, but annoying
+once there's `str`s in other structs.
+
+- want comprehensions and quick zaps on lists; maybe multiple types of str
+with different allocators?
+- something stack only that nukes at the end of the frame?
+- but [str(x) for x in L] makes a mess if you want to store the output
+
+is there some way to make that work nicely and the something manual to
+dupe-and-store?
+
+Seems like more complex types will need a type system tag that do a protocol
+for all the nasty c++ style ctor/dtor/copy/op=. Maybe it's not much
+worse than the conditions in codegen for optional or tuple?
+
+At least for the basics like Str, List, Dict, Set
+
+Every ASSIGN (including in the implementations of List, etc.) has to go through
+a macro so that the copy protocol can be followed.
+
+Would work, but it's basically C++-y and doesn't feel much like writing C any
+more. But maybe it feels like writing python?
+
+'''
+
+
 import last
 
 _TEST_CODE2 = '''
@@ -125,6 +162,8 @@ _KEYWORDS = {
   'false': last.Const('false'),
   'null': last.Const('null'),
   'true': last.Const('true'),
+
+  'str': last.Type('str'),
 }
 
 _KEYWORDS['byte'] = _KEYWORDS['u8']
@@ -820,6 +859,8 @@ class Compiler:
     elif isinstance(expr, last.Const) and expr.name == 'null':
       # Type of null is itself? Not sure.
       return _KEYWORDS['null']
+    elif isinstance(expr, last.String):
+      return _KEYWORDS['str']
     elif isinstance(expr, last.FuncCall):
       if isinstance(expr.func, last.Ident):
         ste_in_globals = self.globals.get(expr.func.name)
@@ -903,6 +944,8 @@ class Compiler:
       return 'void'
     if node == _KEYWORDS['f32']:
       return 'float'
+    if node == _KEYWORDS['str']:
+      return 'struct $Str'
     if isinstance(node, last.PointerDecl):
       return self.get_c_type(node.base) + '*'
     if isinstance(node, last.OptionalDecl):
@@ -927,6 +970,8 @@ class Compiler:
         return self.get_safe_c_name(node.name)
     elif isinstance(node, last.Number):
       return str(node.value)  # TODO, safe-ize this, incl floats, etc.
+    elif isinstance(node, last.String):
+      return '$Str$from_n(\"%s\", sizeof(\"%s\") - 1)' % (node.value, node.value)
     elif isinstance(node, last.Const):
       if node.name == 'false':
         return '(/*false*/0)'
@@ -1180,11 +1225,35 @@ class Compiler:
     with open(outfn, 'w', newline='\n') as f:
       f.write(r'''#include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+struct $Str {
+  char* ptr;
+  int64_t len;
+};
+struct $Str $Str$from_n(char* data, size_t len) {
+  struct $Str s = {malloc(len + 1), len};
+  memcpy(s.ptr, data, len + 1);
+  return s;
+}
+struct $Str $Str$__add__(struct $Str* a, struct $Str* b) {
+  char* p = malloc(a->len + b->len + 1);
+  memcpy(p, a->ptr, a->len);
+  memcpy(p + a->len, b->ptr, b->len + 1);
+  return (struct $Str){p, a->len + b->len};
+}
+void $Str$__del__(struct $Str* self) {
+  free(self->ptr);
+}
+
 static void printint(int x) {
   printf("%d\n", x);
 }
 static void printbool(_Bool x) {
   printf(x ? "true\n" : "false\n");
+}
+static void printstr(struct $Str* s) {
+  printf("%s\n", s->ptr);
 }
 ''')
 
