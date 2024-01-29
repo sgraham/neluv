@@ -173,6 +173,13 @@ _KEYWORDS['int'] = _KEYWORDS['i32']
 
 visit_tag_counter = 0
 tmp_var_counter = 0
+OP_MAP = {
+    '+': '__add__',
+    '-': '__sub__',
+    '*': '__mul__',
+    '/': '__div__',
+    # TODO: more
+}
 
 def load_builtin_macros():
   for x in ["print"]:
@@ -874,6 +881,14 @@ class Compiler:
           return in_globals.rtype
         elif isinstance(in_globals, last.Struct):
           return in_globals.cached_type()
+    elif isinstance(expr, last.UnaryExpr):
+      rhs_type = self.expr_type(funcdef, expr.obj)
+      if expr.op.name == '*':
+        if not isinstance(rhs_type, last.PointerDecl):
+          self.error_at(expr.obj, 'expecting pointer type for dereference')
+        return rhs_type.base
+      else:
+        assert False, "unhandled unary op %s" % op
     elif isinstance(expr, last.Ident):
       if ste := funcdef.symtab.get(expr.name):
         return ste.type
@@ -1008,14 +1023,33 @@ class Compiler:
       result += ')'
       return result
     elif isinstance(node, last.Expr):
-      result = ''
-      for i,x in enumerate(node.chain):
-        # Expr op Expr op Expr op ...
-        if i % 2 == 0:
-          result += '(%s)' % self.expr(x)
-        else:
-          # TODO: passing op right through
-          result += x.name
+      result = '({'
+      i = 1
+      global tmp_var_counter
+      cur_l = node.chain[0]
+      cur_op = node.chain[i]
+      cur_r = node.chain[i+1]
+      while True:
+        l_type = self.expr_type(self.current_function, cur_l)
+        r_type = self.expr_type(self.current_function, cur_r)
+        if l_type is not r_type:
+          error_at(cur_op, 'can\'t "%s" with lhs=%s, rhs=%s' % (cur_op, l_type, r_type))
+        c_type = self.get_c_type(l_type)
+        tmp_var_counter += 1
+        tmp = '_%d' % tmp_var_counter
+        tmp_ident = last.Ident(tmp)
+        self.current_function.symtab[tmp] = last.SymTabEntry(
+            l_type, cur_op, is_compiler_temporary=True)
+        result += '%s %s = %s$%s(%s, %s);' % (
+            c_type, tmp, c_type, OP_MAP[cur_op.name], self.expr(cur_l), self.expr(cur_r))
+
+        cur_l = tmp_ident
+        i += 2
+        if i >= len(node.chain):
+          break
+        cur_op = node.chain[i]
+        cur_r = node.chain[i+1]
+      result += cur_l.name + ';})'
       return result
     elif isinstance(node, last.TupleCreate):
       struct = self.tuple_struct_for_values(self.current_function, node.values)
@@ -1245,6 +1279,11 @@ struct $Str $Str$__add__(struct $Str* a, struct $Str* b) {
 void $Str$__del__(struct $Str* self) {
   free(self->ptr);
 }
+
+#define int32_t$__add__(a, b) ((a)+(b))
+#define int32_t$__sub__(a, b) ((a)-(b))
+#define int32_t$__mul__(a, b) ((a)*(b))
+#define int32_t$__div__(a, b) ((a)/(b))
 
 static void printint(int x) {
   printf("%d\n", x);

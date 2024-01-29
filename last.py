@@ -69,6 +69,7 @@ class SymTabEntry:  # Not AstNode
   is_pending_nonlocal: bool = False
   is_hoisted_function: bool = False
   func_ref_if_upval: AstNode = None
+  is_compiler_temporary: bool = False
 
 upval_binding_counter = 0
 class UpvalBindings:  # Not AstNode
