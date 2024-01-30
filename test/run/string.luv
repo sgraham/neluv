@@ -1,0 +1,16 @@
+def f():
+  return "buddy"
+
+def main():
+  printstr("hello")
+  y = "i'm " + f()
+  printstr(y)
+  x = "blah"
+  printstr(x)
+  printstr(x)
+  del y
+---
+hello
+i'm buddy
+blah
+blah

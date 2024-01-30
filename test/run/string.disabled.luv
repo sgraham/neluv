@@ -1,9 +1,0 @@
-def f():
-  return "buddy"
-
-def main():
-  printstr("hello")
-  printstr("i'm " + f())
----
-hello
-i'm buddy

@@ -6,6 +6,7 @@ endif
 syn case match
 
 " Keywords
+syn keyword     luvKeyword       alloc
 syn keyword     luvKeyword       and
 syn keyword     luvKeyword       as
 syn keyword     luvKeyword       block
@@ -13,10 +14,12 @@ syn keyword     luvKeyword       break
 syn keyword     luvKeyword       check
 syn keyword     luvKeyword       continue
 syn keyword     luvKeyword       def
+syn keyword     luvKeyword       del
 syn keyword     luvKeyword       elif
 syn keyword     luvKeyword       else
 syn keyword     luvKeyword       false
 syn keyword     luvKeyword       for
+syn keyword     luvKeyword       global
 syn keyword     luvKeyword       if
 syn keyword     luvKeyword       in
 syn keyword     luvKeyword       not
@@ -30,6 +33,7 @@ syn keyword     luvKeyword       scoped
 syn keyword     luvKeyword       struct
 syn keyword     luvKeyword       true
 syn keyword     luvKeyword       union
+syn keyword     luvKeyword       with
 hi def link     luvKeyword       Keyword
 
 " Basic type declarations
@@ -40,7 +44,7 @@ syn keyword     luvType str
 syn keyword     luvType void
 hi def link     luvType Type
 
-syn keyword     luvBuiltin range iter next
+syn keyword     luvBuiltin range iter next stack heap enumerate
 hi def link     luvBuiltin Function
 
 syn region	luvPreProc	start="^\s*\zs\%(%:\|#\)" skip="\\$" end="$" keepend contains=ALLBUT,@Spell
@@ -48,8 +52,23 @@ syn region	luvPreProc	start="\%(%:\|#\){" end="}" keepend contains=ALLBUT,@Spell
 hi def link luvPreProc PreProc
 
 " Strings
-syn region      luvString start=+L\="+ skip=+\\\\\|\\"+ end=+"+ contains=@Spell,luvTargetName
-syn match       luvTargetName '\v:[^"]+' contained
+syn region  luvString matchgroup=luvQuotes
+      \ start=+[f]\=\z(['"]\)+ end="\z1" skip="\\\\\|\\\z1"
+      \ contains=luvEscape,@Spell
+syn region  luvString matchgroup=luvTripleQuotes
+      \ start=+[f]\=\z('''\|"""\)+ end="\z1" keepend
+      \ contains=luvEscape,@Spell
+
+syn match   luvEscape	+\\[abfnrtv'"\\]+ contained
+syn match   luvEscape	"\\\o\{1,3}" contained
+syn match   luvEscape	"\\x\x\{2}" contained
+syn match   luvEscape	"\%(\\u\x\{4}\|\\U\x\{8}\)" contained
+syn match   luvEscape	"\\$"
+
+hi def link luvQuotes		      String
+hi def link luvTripleQuotes		luvQuotes
+
+
 hi def link     luvString            String
 hi def link     luvTargetName        Special
 

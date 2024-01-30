@@ -127,6 +127,10 @@ class Return(AstNode):
   value: AstNode
 
 @dataclass
+class Del(AstNode):
+  exprs: list[AstNode]
+
+@dataclass
 class Pass(AstNode):
   pass
 

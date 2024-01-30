@@ -318,6 +318,9 @@ class ToAst(Transformer):
   def return_stmt(self, children):
     return last.Return(children[0])
 
+  def del_stmt(self, children):
+    return last.Del(children)
+
   def pass_stmt(self, children):
     return last.Pass()
 
@@ -899,6 +902,11 @@ class Compiler:
           self.expr_type(funcdef, expr.chain[2]) is _KEYWORDS['i32']):
         # HACK HACK HACK
         return _KEYWORDS['i32']
+      if (expr.chain[1].name in ('+',) and
+          self.expr_type(funcdef, expr.chain[0]) is _KEYWORDS['str'] and
+          self.expr_type(funcdef, expr.chain[2]) is _KEYWORDS['str']):
+        # HACK HACK HACK
+        return _KEYWORDS['str']
     elif isinstance(expr, last.GetAttr):
       lhs = self.expr_type(funcdef, expr.lhs)
       assert isinstance(lhs, last.Type) and isinstance(lhs.base, last.Struct)
@@ -972,6 +980,12 @@ class Compiler:
     print('GET_C_TYPE', node)
     return '??/*%s*/' % node
 
+  def get_mangled_c_type(self, node):
+    x = self.get_c_type(node)
+    x = x.replace('struct ', '')
+    x = x.replace('* ', 'STAR')
+    return x
+
   def get_safe_c_name(self, luv_name):
     # TODO
     return luv_name
@@ -984,9 +998,15 @@ class Compiler:
       else:
         return self.get_safe_c_name(node.name)
     elif isinstance(node, last.Number):
-      return str(node.value)  # TODO, safe-ize this, incl floats, etc.
+      if isinstance(node.value, int):
+        return 'int32_t$__lit__(%s)' % node.value  # TODO: unsigned and size suffixes
+      elif isinstance(node.value, float):
+        # TODO: double vs. float based on ... size?
+        return 'double$__lit__(%s)' % node.value
+      else:
+        assert False, "unhandled Number type %s" % node
     elif isinstance(node, last.String):
-      return '$Str$from_n(\"%s\", sizeof(\"%s\") - 1)' % (node.value, node.value)
+      return '$Str$__lit__(\"%s\")' % node.value
     elif isinstance(node, last.Const):
       if node.name == 'false':
         return '(/*false*/0)'
@@ -1040,8 +1060,9 @@ class Compiler:
         tmp_ident = last.Ident(tmp)
         self.current_function.symtab[tmp] = last.SymTabEntry(
             l_type, cur_op, is_compiler_temporary=True)
+        mangled_c_type = self.get_mangled_c_type(l_type)
         result += '%s %s = %s$%s(%s, %s);' % (
-            c_type, tmp, c_type, OP_MAP[cur_op.name], self.expr(cur_l), self.expr(cur_r))
+            c_type, tmp, mangled_c_type, OP_MAP[cur_op.name], self.expr(cur_l), self.expr(cur_r))
 
         cur_l = tmp_ident
         i += 2
@@ -1100,8 +1121,13 @@ class Compiler:
       return result
     elif isinstance(node, last.Pass):
       return ';'
-    elif isinstance(node, last.Nonlocal):
-      return ''
+    elif isinstance(node, last.Del):
+      result = ''
+      for x in node.exprs:
+        type = self.expr_type(self.current_function, x)
+        c_type = self.get_mangled_c_type(type)
+        result += '%s$__del__(%s);' % (c_type, self.expr(x))
+      return result
     elif isinstance(node, last.Assign):
       if isinstance(node.lhs, last.TupleAssign):
         assert all(isinstance(x, last.Ident) for x in node.lhs.targets)
@@ -1265,21 +1291,29 @@ struct $Str {
   char* ptr;
   int64_t len;
 };
+
+#define $Str$__lit__(s) (struct $Str){s, sizeof(s) - 1}
+
 struct $Str $Str$from_n(char* data, size_t len) {
   struct $Str s = {malloc(len + 1), len};
   memcpy(s.ptr, data, len + 1);
   return s;
 }
-struct $Str $Str$__add__(struct $Str* a, struct $Str* b) {
-  char* p = malloc(a->len + b->len + 1);
-  memcpy(p, a->ptr, a->len);
-  memcpy(p + a->len, b->ptr, b->len + 1);
-  return (struct $Str){p, a->len + b->len};
+struct $Str $Str$__add__(struct $Str a, struct $Str b) {
+  char* p = malloc(a.len + b.len + 1);
+  memcpy(p, a.ptr, a.len);
+  memcpy(p + a.len, b.ptr, b.len + 1);
+  return (struct $Str){p, a.len + b.len};
 }
-void $Str$__del__(struct $Str* self) {
-  free(self->ptr);
+void $Str$__del__(struct $Str self) {
+  free(self.ptr);
 }
 
+#define double$__lit__(a) (a)
+#define double$__del__(a)
+
+#define int32_t$__lit__(a) (a)
+#define int32_t$__del__(a)
 #define int32_t$__add__(a, b) ((a)+(b))
 #define int32_t$__sub__(a, b) ((a)-(b))
 #define int32_t$__mul__(a, b) ((a)*(b))
@@ -1291,8 +1325,8 @@ static void printint(int x) {
 static void printbool(_Bool x) {
   printf(x ? "true\n" : "false\n");
 }
-static void printstr(struct $Str* s) {
-  printf("%s\n", s->ptr);
+static void printstr(struct $Str s) {
+  printf("%s\n", s.ptr);
 }
 ''')
 
@@ -1404,7 +1438,7 @@ def do_tests(parser, test_list, update):
     err = (node, msg)
 
   for t in test_list:
-    #print(t)
+    print(t)
     if '.disabled.' in t:
       disabled_list.append(t)
       continue
