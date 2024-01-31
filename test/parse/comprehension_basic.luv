@@ -1,0 +1,19 @@
+def main():
+  L = [1,2,3,4,5]
+  M = [a for a in L]
+---
+TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
+                                     name='main',
+                                     params=[],
+                                     body=Block(entries=[Assign(lhs=Ident(name='L'),
+                                                                rhs=List(values=[Number(value=1),
+                                                                                 Number(value=2),
+                                                                                 Number(value=3),
+                                                                                 Number(value=4),
+                                                                                 Number(value=5)])),
+                                                         Assign(lhs=Ident(name='M'),
+                                                                rhs=ListComprehension(body=Comprehension(result=Ident(name='a'),
+                                                                                                         fors=[ComprehensionFor(its=Ident(name='a'),
+                                                                                                                                thing=Ident(name='L'))],
+                                                                                                         ifs=None)))]),
+                                     hidden=False)]))

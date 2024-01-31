@@ -67,6 +67,10 @@ class RangeType(Type):
   pass
 
 @dataclass
+class IterType(Type):
+  pass
+
+@dataclass
 class ListType(Type):
   pass
 

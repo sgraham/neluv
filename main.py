@@ -798,6 +798,14 @@ class Compiler:
       tl.hidden = True
       self.insert_global_or_error(tl)
 
+  def create_tuple_struct(self, field_types, node):
+    c_name_field_types = [self.get_mangled_c_type(t) for t in field_types]
+    members = [last.TypedVar(t, '_%d' % i) for i,t in enumerate(field_types)]
+    name = '$Tuple$' + '$'.join(str(x) for x in c_name_field_types)
+    struct = last.Struct(name, members)
+    struct.omit_constructor = True
+    self.tuple_structs[name] = (node, struct)
+
   class ResolveIdents:
     def __init__(self, parent):
       self.cur_func = None
@@ -859,12 +867,7 @@ class Compiler:
 
     def visit_TupleCreate(self, tc):
       field_types = [self.parent.expr_type(self.cur_func, v) for v in tc.values]
-      c_name_field_types = [self.parent.get_mangled_c_type(t) for t in field_types]
-      members = [last.TypedVar(t, '_%d' % i) for i,t in enumerate(field_types)]
-      name = '$Tuple$' + '$'.join(str(x) for x in c_name_field_types)
-      struct = last.Struct(name, members)
-      struct.omit_constructor = True
-      self.parent.tuple_structs[name] = (tc, struct)
+      self.parent.create_tuple_struct(field_types, tc)
 
     def make_list_struct(self, elem_type, node):
       members = [
@@ -935,6 +938,8 @@ class Compiler:
   def tuple_struct_for_types(self, field_types):
     c_name_field_types = [self.get_c_type(t) for t in field_types]
     name = '$Tuple$' + '$'.join(str(x) for x in c_name_field_types)
+    if name not in self.tuple_structs:
+      self.create_tuple_struct(field_types, None)
     return self.tuple_structs[name][1]
 
   def tuple_struct_for_values(self, func, values):
@@ -962,6 +967,21 @@ class Compiler:
         if expr.func.name == 'range':
           return _RANGE_TYPE
 
+        if expr.func.name == 'iter':
+          assert len(expr.args) == 1
+          arg_type = self.expr_type(funcdef, expr.args[0])
+          return last.IterType(_RANGE_TYPE)
+
+        if expr.func.name == 'next':
+          assert len(expr.args) == 1
+          arg_type = self.expr_type(funcdef, expr.args[0])
+          assert isinstance(arg_type, last.IterType)
+          if arg_type.base is _RANGE_TYPE:
+            value_type = _KEYWORDS['i32']
+          else:
+            assert False, "todo"
+          return self.tuple_struct_for_types([_KEYWORDS['bool'], value_type])
+          
         ste_in_globals = self.globals.get(expr.func.name)
         in_globals = ste_in_globals.ref_node
         if isinstance(in_globals, last.FuncDef):
@@ -1072,6 +1092,8 @@ class Compiler:
       return 'struct $Str'
     if isinstance(node, last.RangeType):
       return 'struct $Range'
+    if isinstance(node, last.IterType):
+      return '%sIter' % self.get_c_type(node.base)
     if isinstance(node, last.PointerDecl):
       return self.get_c_type(node.base) + '*'
     if isinstance(node, last.OptionalDecl):
@@ -1147,6 +1169,20 @@ class Compiler:
               self.expr(node.args[0]), self.expr(node.args[1]), self.expr(node.args[2]))
         else:
           self.error_at(node.func, 'incorrect number of arguments to "range"')
+
+      if isinstance(node.func, last.Ident) and node.func.name == 'iter':
+        if len(node.args) == 1:
+          arg_type = self.expr_type(self.current_function, node.args[0])
+          return '%s$__iter__(&%s)' % (self.get_mangled_c_type(arg_type), self.expr(node.args[0]))
+        else:
+          self.error_at(node.func, 'incorrect number of arguments to "iter"')
+
+      if isinstance(node.func, last.Ident) and node.func.name == 'next':
+        if len(node.args) == 1:
+          arg_type = self.expr_type(self.current_function, node.args[0])
+          return '%s$__next__(&%s)' % (self.get_mangled_c_type(arg_type), self.expr(node.args[0]))
+        else:
+          self.error_at(node.func, 'incorrect number of arguments to "next"')
 
       result = self.expr(node.func)
       result += '('
@@ -1497,36 +1533,39 @@ void $List$int32_t$__del__(struct $List$int32_t* L);
 void $List$int32_t$reserve(struct $List$int32_t* L, int64_t cap);
 void $List$int32_t$append(struct $List$int32_t* L, int32_t value);
 
-struct $Tuple$_Bool$int64_t {
+#ifndef DEFINED_$Tuple$_Bool$int32_t
+#define DEFINED_$Tuple$_Bool$int32_t
+struct $Tuple$_Bool$int32_t {
   _Bool _0;
-  int64_t _1;
+  int32_t _1;
 };
+#endif
 
 struct $Range {
-  int64_t start;
-  int64_t stop;
-  int64_t step;
+  int32_t start;
+  int32_t stop;
+  int32_t step;
 };
 
 struct $RangeIter {
   struct $Range* range;
-  int64_t cur;
+  int32_t cur;
 };
 
-typedef struct $Tuple$_Bool$int64_t $RangeIterReturn;
-typedef int64_t $RangeIterValue;
+typedef struct $Tuple$_Bool$int32_t $RangeIterReturn;
+typedef int32_t $RangeIterValue;
 
 struct $RangeIter $Range$__iter__(struct $Range* self) {
   return (struct $RangeIter){self, self->start};
 }
 
-struct $Tuple$_Bool$int64_t $RangeIter$__next__(struct $RangeIter* iter) {
+struct $Tuple$_Bool$int32_t $RangeIter$__next__(struct $RangeIter* iter) {
   if (iter->cur >= iter->range->stop) {
-    return (struct $Tuple$_Bool$int64_t){0};
+    return (struct $Tuple$_Bool$int32_t){0};
   }
-  int64_t ret = iter->cur;
+  int32_t ret = iter->cur;
   iter->cur += iter->range->step;
-  return (struct $Tuple$_Bool$int64_t){1, ret};
+  return (struct $Tuple$_Bool$int32_t){1, ret};
 }
 
 static void printint(int x) {

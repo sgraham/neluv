@@ -1,0 +1,29 @@
+def main():
+  r = range(3)
+  i = iter(r)
+  valid, val = next(i)
+  printbool(valid)
+  printint(val)
+  valid, val = next(i)
+  printbool(valid)
+  printint(val)
+  valid, val = next(i)
+  printbool(valid)
+  printint(val)
+  valid, val = next(i)
+  printbool(valid)
+  printint(val)
+  valid, val = next(i)
+  printbool(valid)
+  printint(val)
+---
+true
+0
+true
+1
+true
+2
+false
+0
+false
+0
