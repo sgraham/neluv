@@ -1,8 +1,7 @@
 def main():
   x = 0
   for i in range(4):
-    x += 1
+    x = x + i
   printint(x)
 ---
 6
-

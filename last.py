@@ -16,6 +16,10 @@ class String(AstNode):
   value: str
 
 @dataclass
+class Fstring(AstNode):
+  value: str
+
+@dataclass
 class Const(AstNode):
   name: str
 
@@ -57,6 +61,14 @@ class Type(AstNode):
   # - a reference to another Type (for pointer-to, etc.)
   # - a reference an AstNode for a user-defined type
   base: object
+
+@dataclass
+class RangeType(Type):
+  pass
+
+@dataclass
+class ListType(Type):
+  pass
 
 @dataclass
 class SymTabEntry:  # Not AstNode
@@ -228,6 +240,25 @@ class TupleCreate(AstNode):
 @dataclass
 class TupleAssign(AstNode):
   targets: list[AstNode]
+
+@dataclass
+class List(AstNode):
+  values: list[AstNode]
+
+@dataclass
+class Comprehension(AstNode):
+  result: AstNode
+  fors: list[AstNode]
+  ifs: list[AstNode]
+
+@dataclass
+class ComprehensionFor(AstNode):
+  its: list[AstNode]
+  thing: AstNode
+
+@dataclass
+class ListComprehension(AstNode):
+  body: AstNode
 
 @dataclass
 class ParseError:

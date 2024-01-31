@@ -140,7 +140,7 @@ suite: simple_stmt | _NEWLINE _INDENT stmt+ _DEDENT
      | "true"    -> const_true
      | "false"   -> const_false
 
-?string_concat: string+
+?string_concat: (string | fstring)+
 
 _tuple_inner: test (("," test)+ [","] | ",")
 
@@ -177,6 +177,7 @@ comp_for: "for" exprlist "in" or_test
 
 number: DEC_NUMBER | HEX_NUMBER | BIN_NUMBER | OCT_NUMBER | FLOAT_NUMBER | IMAG_NUMBER
 string: STRING | LONG_STRING
+fstring: FSTRING | LONG_FSTRING
 
 // Other terminals
 
@@ -194,8 +195,10 @@ _NEWLINE: ( /\r?\n[\t ]*/ )+
 NAME: /[^\W\d]\w*/
 COMMENT: /\/\/[^\n]*/
 
-STRING: /([ubf]?r?|r[ubf])("(?!"").*?(?<!\\)(\\\\)*?"|'(?!'').*?(?<!\\)(\\\\)*?')/i
-LONG_STRING: /([ubf]?r?|r[ubf])(""".*?(?<!\\)(\\\\)*?"""|'''.*?(?<!\\)(\\\\)*?''')/is
+FSTRING: /([f]?r?|r[f])("(?!"").*?(?<!\\)(\\\\)*?"|'(?!'').*?(?<!\\)(\\\\)*?')/i
+STRING: /([ub]?r?|r[ub])("(?!"").*?(?<!\\)(\\\\)*?"|'(?!'').*?(?<!\\)(\\\\)*?')/i
+LONG_FSTRING: /([f]?r?|r[f])(""".*?(?<!\\)(\\\\)*?"""|'''.*?(?<!\\)(\\\\)*?''')/is
+LONG_STRING: /([f]?r?|r[f])(""".*?(?<!\\)(\\\\)*?"""|'''.*?(?<!\\)(\\\\)*?''')/is
 
 _SPECIAL_DEC: "0".."9"        ("_"?  "0".."9"                       )*
 DEC_NUMBER:   "1".."9"        ("_"?  "0".."9"                       )*

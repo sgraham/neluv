@@ -1,0 +1,15 @@
+L = [f"{i}: {x}" for i,x in enumerate(range(10)) if i % 2 == 0]
+---
+TopLevel(body=Block(entries=[Assign(lhs=Ident(name='L'),
+                                    rhs=ListComprehension(body=Comprehension(result=Fstring(value='{i}: '
+                                                                                                  '{x}'),
+                                                                             fors=[ComprehensionFor(its=[Ident(name='i'),
+                                                                                                         Ident(name='x')],
+                                                                                                    thing=FuncCall(func=Ident(name='enumerate'),
+                                                                                                                   args=[FuncCall(func=Ident(name='range'),
+                                                                                                                                  args=[Number(value=10)])]))],
+                                                                             ifs=CompExpr(chain=[Expr(chain=[Ident(name='i'),
+                                                                                                             Op(name='%'),
+                                                                                                             Number(value=2)]),
+                                                                                                 Op(name='=='),
+                                                                                                 Number(value=0)]))))]))

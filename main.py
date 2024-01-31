@@ -171,6 +171,8 @@ _KEYWORDS['double'] = _KEYWORDS['f64']
 _KEYWORDS['float'] = _KEYWORDS['f32']
 _KEYWORDS['int'] = _KEYWORDS['i32']
 
+_RANGE_TYPE = last.RangeType(None)
+
 visit_tag_counter = 0
 tmp_var_counter = 0
 OP_MAP = {
@@ -180,6 +182,11 @@ OP_MAP = {
     '/': '__div__',
     # TODO: more
 }
+
+def get_tmp_var():
+  global tmp_var_counter
+  tmp_var_counter += 1
+  return '$_%d' % tmp_var_counter
 
 def load_builtin_macros():
   for x in ["print"]:
@@ -220,6 +227,9 @@ class ToAst(Transformer):
   def STRING(self, v):
     return v[1:-1]
 
+  def FSTRING(self, v):
+    return v[2:-1]
+
   def __default_token__(self, tok):
     return last.Op(tok.value)
 
@@ -234,6 +244,9 @@ class ToAst(Transformer):
 
   def string(self, children):
     return last.String(children[0])
+
+  def fstring(self, children):
+    return last.Fstring(children[0])
 
   def ident(self, children):
     x = _KEYWORDS.get(children[0], None)
@@ -255,6 +268,9 @@ class ToAst(Transformer):
     for i in range(len(children) - 2, -1, -1):
       cur = last.PackageReference(children[i], cur)
     return cur
+
+  def exprlist(self, children):
+    return children
 
   def testlist_tuple(self, children):
     return last.TupleCreate(children)
@@ -366,6 +382,9 @@ class ToAst(Transformer):
   def assign(self, children):
     return last.Assign(children[0], children[1])
 
+  def list(self, children):
+    return last.List(children)
+
   def funcdef(self, children):
     if len(children) == 2:
       return last.FuncDef(_KEYWORDS['auto'], children[0], [], children[1])
@@ -385,6 +404,22 @@ class ToAst(Transformer):
     type = children[0] or _KEYWORDS['auto']
     params = children[1]
     return last.FuncType(base=None, rtype=type, params=params)
+
+  def comprehension(self, children):
+    if len(children) == 2:
+      return last.Comprehension(children[0], children[1], None)
+    elif len(children) == 3:
+      return last.Comprehension(children[0], children[1], children[2])
+    assert False
+
+  def list_comprehension(self, children):
+    return last.ListComprehension(children[0])
+
+  def comp_fors(self, children):
+    return children
+
+  def comp_for(self, children):
+    return last.ComprehensionFor(children[0], children[1])
 
   def parameter_types(self, children):
     return children
@@ -469,6 +504,7 @@ class Compiler:
 
     self.optional_structs = {}
     self.tuple_structs = {}
+    self.list_structs = {}
 
     self.ast_root = ast_root
     self.find_globals()
@@ -480,8 +516,11 @@ class Compiler:
     for contained, (od, struct) in self.optional_structs.items():
       self.globals[struct.name] = last.SymTabEntry(od, struct)
 
-    for contained, (od, struct) in self.tuple_structs.items():
-      self.globals[struct.name] = last.SymTabEntry(od, struct)
+    for contained, (tc, struct) in self.tuple_structs.items():
+      self.globals[struct.name] = last.SymTabEntry(tc, struct)
+
+    for contained, (node, struct) in self.list_structs.items():
+      self.globals[struct.name] = last.SymTabEntry(node, struct)
 
     self.current_function = None
 
@@ -507,21 +546,26 @@ class Compiler:
               'redefinition of "%s" in "%s"' % (node.name, self.func.name))
       self.func.symtab[node.name] = last.SymTabEntry(node.type, node, is_declared_local=True)
 
+    def visit_For(self, node):
+      assert isinstance(node.it, last.Ident)
+      self.local(node.it)
+
+    def local(self, ident):
+      x = self.func.symtab.get(ident.name)
+      if not x:
+        self.func.symtab[ident.name] = last.SymTabEntry(
+            _KEYWORDS['auto'], ident, is_declared_local=True)
+      elif x.is_pending_nonlocal and self.parent.is_lexically_before(ident, x.ref_node):
+        self.parent.error_at(ident,
+            'name "%s" is used before nonlocal declaration' % ident.name)
+
     def visit_Assign(self, node):
-      def local(ident):
-        x = self.func.symtab.get(ident.name)
-        if not x:
-          self.func.symtab[ident.name] = last.SymTabEntry(
-              _KEYWORDS['auto'], ident, is_declared_local=True)
-        elif x.is_pending_nonlocal and self.parent.is_lexically_before(ident, x.ref_node):
-          self.parent.error_at(ident,
-              'name "%s" is used before nonlocal declaration' % ident.name)
       if isinstance(node.lhs, last.Ident):
-        local(node.lhs)
+        self.local(node.lhs)
       elif isinstance(node.lhs, last.TupleAssign):
         if all(isinstance(x, last.Ident) for x in node.lhs.targets):
           for x in node.lhs.targets:
-            local(x)
+            self.local(x)
 
   class ScanForNonlocal:
     def __init__(self, func, parent):
@@ -763,8 +807,8 @@ class Compiler:
       assert not self.cur_func
       self.cur_func = func
 
-    def resolve_ident(self, ident, expr_to_type, tuple_index):
-      found = self.parent.expr_type(self.cur_func, expr_to_type)
+    def resolve_ident(self, ident, rhs_type, tuple_index):
+      found = rhs_type
       if tuple_index is not None:
         found = found.members[tuple_index].type
       x = self.cur_func.symtab.get(ident.name)
@@ -781,16 +825,30 @@ class Compiler:
           else:
             self.parent.error_at(ident, 'previously typed as "%s", now "%s"' % (x.type, found))
 
+    def visit_For(self, node):
+      assert isinstance(node.it, last.Ident), "todo: tuple iter"
+      coll_type = self.parent.expr_type(self.cur_func, node.collection)
+      if coll_type is _RANGE_TYPE:
+        # HACK because literals are always i32 not i64, and no auto convert
+        rhs_type = _KEYWORDS['i32']
+      elif isinstance(coll_type, last.ListType):
+        rhs_type = coll_type.base
+      else:
+        assert False, "todo"
+      self.resolve_ident(node.it, rhs_type, tuple_index=None)
+
     def visit_Assign(self, assign):
       if isinstance(assign.lhs, last.Ident):
-        self.resolve_ident(assign.lhs, assign.rhs, tuple_index=None)
+        rhs_type = self.parent.expr_type(self.cur_func, assign.rhs)
+        self.resolve_ident(assign.lhs, rhs_type, tuple_index=None)
       elif isinstance(assign.lhs, last.TupleAssign):
         assert all(isinstance(x, last.Ident) for x in assign.lhs.targets)
+        rhs_type = self.parent.expr_type(self.cur_func, assign.rhs)
         for i,x in enumerate(assign.lhs.targets):
-          self.resolve_ident(x, assign.rhs, tuple_index=i)
+          self.resolve_ident(x, rhs_type, tuple_index=i)
 
     def visit_OptionalDecl(self, od):
-      c_base_type_name = self.parent.get_c_type(od.base)
+      c_base_type_name = self.parent.get_mangled_c_type(od.base)
       if c_base_type_name not in self.parent.optional_structs:
         opt_struct_name = '$Opt$' + c_base_type_name
         members = [last.TypedVar(_KEYWORDS['bool'], 'has'),
@@ -801,12 +859,38 @@ class Compiler:
 
     def visit_TupleCreate(self, tc):
       field_types = [self.parent.expr_type(self.cur_func, v) for v in tc.values]
-      c_name_field_types = [self.parent.get_c_type(t) for t in field_types]
+      c_name_field_types = [self.parent.get_mangled_c_type(t) for t in field_types]
       members = [last.TypedVar(t, '_%d' % i) for i,t in enumerate(field_types)]
       name = '$Tuple$' + '$'.join(str(x) for x in c_name_field_types)
       struct = last.Struct(name, members)
       struct.omit_constructor = True
       self.parent.tuple_structs[name] = (tc, struct)
+
+    def make_list_struct(self, elem_type, node):
+      members = [
+          last.TypedVar(last.PointerDecl(elem_type), "ptr"),
+          last.TypedVar(_KEYWORDS['i64'], "len"),
+          last.TypedVar(_KEYWORDS['i64'], "cap")
+      ]
+      base_type_name = self.parent.get_mangled_c_type(elem_type)
+      name = '$List$' + base_type_name
+      struct = last.Struct(name, members)
+      struct.omit_constructor = True
+      self.parent.list_structs[base_type_name] = (node, struct)
+
+    def visit_ListComprehension(self, lc):
+      elem_type = self.parent.expr_type(self.cur_func, lc.body.result)
+      self.make_list_struct(elem_type, lc)
+
+    def visit_List(self, l):
+      if len(l.values) == 0:
+        self.parent.error_at(l, "can't determine type of empty list yet")
+      t = self.parent.expr_type(self.cur_func, l.values[0])
+      for i in l.values[1:]:
+        t2 = self.parent.expr_type(self.cur_func, i)
+        if t is not t2:
+          self.error_at(l, 'inconsistent types in list, was "%s" now "%s"' % (t, t2))
+      self.make_list_struct(t, l)
 
     #def visit_Ident(self, ident):
       #x = self.cur_func.symtab.get(ident.name)
@@ -871,8 +955,13 @@ class Compiler:
       return _KEYWORDS['null']
     elif isinstance(expr, last.String):
       return _KEYWORDS['str']
+    elif isinstance(expr, last.Fstring):
+      return _KEYWORDS['str']
     elif isinstance(expr, last.FuncCall):
       if isinstance(expr.func, last.Ident):
+        if expr.func.name == 'range':
+          return _RANGE_TYPE
+
         ste_in_globals = self.globals.get(expr.func.name)
         in_globals = ste_in_globals.ref_node
         if isinstance(in_globals, last.FuncDef):
@@ -880,6 +969,7 @@ class Compiler:
             if not self.resolve_function_return_type(in_globals):
               # TODO: Returning None for recursive resolve_function_return_type()
               # seems dicey for general users of this function.
+              # See extra HACK in last.Expr case below too.
               return None
           return in_globals.rtype
         elif isinstance(in_globals, last.Struct):
@@ -897,16 +987,19 @@ class Compiler:
         return ste.type
       assert False, "unhandled Ident expr_type %s" % expr
     elif isinstance(expr, last.Expr):
-      if (expr.chain[1].name in ('+', '*', '-', '/') and
-          self.expr_type(funcdef, expr.chain[0]) is _KEYWORDS['i32'] and
-          self.expr_type(funcdef, expr.chain[2]) is _KEYWORDS['i32']):
-        # HACK HACK HACK
-        return _KEYWORDS['i32']
-      if (expr.chain[1].name in ('+',) and
-          self.expr_type(funcdef, expr.chain[0]) is _KEYWORDS['str'] and
-          self.expr_type(funcdef, expr.chain[2]) is _KEYWORDS['str']):
-        # HACK HACK HACK
-        return _KEYWORDS['str']
+      t0 = self.expr_type(funcdef, expr.chain[0])
+      if t0 is None: return None  # HACK for recursive expr_type, see also in FuncCall.
+      for i in range(1, len(expr.chain), 2):
+        if (expr.chain[i].name not in ('+', '*', '-', '/') or
+            self.expr_type(funcdef, expr.chain[i+1]) is not t0):
+          break
+      else:
+        return t0
+    elif isinstance(expr, last.ListComprehension):
+      return last.ListType(self.expr_type(funcdef, expr.body.result))
+    elif isinstance(expr, last.List):
+      # Initial visit to create struct does other error checks.
+      return last.ListType(self.expr_type(funcdef, expr.values[0]))
     elif isinstance(expr, last.GetAttr):
       lhs = self.expr_type(funcdef, expr.lhs)
       assert isinstance(lhs, last.Type) and isinstance(lhs.base, last.Struct)
@@ -916,6 +1009,10 @@ class Compiler:
       else:
         assert '%s not found on %s' % (expr.rhs, lhs.base)
       pass
+    elif isinstance(expr, last.GetItem):
+      obj = self.expr_type(funcdef, expr.obj)
+      assert isinstance(obj, last.Type)
+      return obj.base
     elif isinstance(expr, last.TupleCreate):
       return self.tuple_struct_for_values(funcdef, expr.values)
     elif isinstance(expr, last.TupleAssign):
@@ -961,6 +1058,10 @@ class Compiler:
       return 'int32_t'
     if node == _KEYWORDS['u32']:
       return 'uint32_t'
+    if node == _KEYWORDS['i64']:
+      return 'int64_t'
+    if node == _KEYWORDS['u64']:
+      return 'uint64_t'
     if node == _KEYWORDS['bool']:
       return '_Bool'
     if node == _KEYWORDS['void']:
@@ -969,12 +1070,16 @@ class Compiler:
       return 'float'
     if node == _KEYWORDS['str']:
       return 'struct $Str'
+    if isinstance(node, last.RangeType):
+      return 'struct $Range'
     if isinstance(node, last.PointerDecl):
       return self.get_c_type(node.base) + '*'
     if isinstance(node, last.OptionalDecl):
-      return 'struct ' + self.optional_structs[self.get_c_type(node.base)][1].name
+      return 'struct ' + self.optional_structs[self.get_mangled_c_type(node.base)][1].name
     if isinstance(node, last.Struct):
       return 'struct ' + node.name
+    if isinstance(node, last.ListType):
+      return 'struct ' + self.list_structs[self.get_mangled_c_type(node.base)][1].name
     if isinstance(node, last.Type):
       return self.get_c_type(node.base)
     print('GET_C_TYPE', node)
@@ -1026,7 +1131,23 @@ class Compiler:
       return node.op.name + '(' + self.expr(node.obj) + ')'
     elif isinstance(node, last.GetAttr):
       return self.expr(node.lhs) + '.' + node.rhs
+    elif isinstance(node, last.GetItem):
+      ty = self.expr_type(self.current_function, node.obj)
+      c_type = self.get_mangled_c_type(ty)
+      return '%s$__getitem__(&%s, %s)' % (c_type, self.expr(node.obj), self.expr(node.index))
     elif isinstance(node, last.FuncCall):
+      if isinstance(node.func, last.Ident) and node.func.name == 'range':
+        if len(node.args) == 1:
+          return '(struct $Range){0,%s,1}' % self.expr(node.args[0])
+        elif len(node.args) == 2:
+          return '(struct $Range){%s,%s,1}' % (
+              self.expr(node.args[0]), self.expr(node.args[1]))
+        elif len(node.args) == 3:
+          return '(struct $Range){%s,%s,%s}' % (
+              self.expr(node.args[0]), self.expr(node.args[1]), self.expr(node.args[2]))
+        else:
+          self.error_at(node.func, 'incorrect number of arguments to "range"')
+
       result = self.expr(node.func)
       result += '('
 
@@ -1042,10 +1163,30 @@ class Compiler:
       result += ','.join(self.expr(x) for x in (upvals + node.args))
       result += ')'
       return result
+    elif isinstance(node, last.ListComprehension):
+      result = '({'
+      list_type = self.expr_type(self.current_function, node)
+      for f in node.body.fors:
+        tmp = get_tmp_var()
+        thing_type = self.expr_type(self.current_function, f.thing)
+        iter_type = self.get_mangled_c_type(thing_type) + '$Iter'
+        result += '%s %s' % (iter_type, tmp)
+      result += '})'
+      return result
+    elif isinstance(node, last.List):
+      result = '({'
+      list_type = self.expr_type(self.current_function, node)
+      tmp_list = get_tmp_var()
+      result += '%s %s = {0};' % (self.get_c_type(list_type), tmp_list)
+      mangled_list_type = self.get_mangled_c_type(list_type)
+      result += '%s$reserve(&%s, %s);' % (mangled_list_type, tmp_list, len(node.values))
+      for v in node.values:
+        result += '%s$append(&%s, %s);' % (mangled_list_type, tmp_list, self.expr(v))
+      result += '%s;' % tmp_list
+      return result + '})'
     elif isinstance(node, last.Expr):
       result = '({'
       i = 1
-      global tmp_var_counter
       cur_l = node.chain[0]
       cur_op = node.chain[i]
       cur_r = node.chain[i+1]
@@ -1055,8 +1196,7 @@ class Compiler:
         if l_type is not r_type:
           error_at(cur_op, 'can\'t "%s" with lhs=%s, rhs=%s' % (cur_op, l_type, r_type))
         c_type = self.get_c_type(l_type)
-        tmp_var_counter += 1
-        tmp = '_%d' % tmp_var_counter
+        tmp = get_tmp_var()
         tmp_ident = last.Ident(tmp)
         self.current_function.symtab[tmp] = last.SymTabEntry(
             l_type, cur_op, is_compiler_temporary=True)
@@ -1111,8 +1251,25 @@ class Compiler:
         result += self.stmt(node.els)
       return result
     elif isinstance(node, last.For):
-      pprint.pprint(node)
-      pass
+      coll_tmp = get_tmp_var()
+      coll_type = self.expr_type(self.current_function, node.collection)
+      coll_c_type = self.get_c_type(coll_type)
+      coll_mangled_c_type = self.get_mangled_c_type(coll_type)
+      iter_tmp = get_tmp_var()
+      it_ret_tmp = get_tmp_var()
+      result = '%s %s = %s;' % (coll_c_type, coll_tmp, self.expr(node.collection))
+      result += '%sIter %s = %s$__iter__(&%s);' % (
+          coll_c_type, iter_tmp, coll_mangled_c_type, coll_tmp)
+      assert isinstance(node.it, last.Ident), "todo"
+      it_name = node.it.name
+      result += '%sIterReturn %s = {0};' % (coll_mangled_c_type, it_ret_tmp)
+      result += 'for(;;) {'
+      result += '%s = %sIter$__next__(&%s);' % (it_ret_tmp, coll_mangled_c_type, iter_tmp)
+      result += 'if (!(%s._0)) break;' % it_ret_tmp
+      result += '%sIterValue %s = %s._1;' % (coll_mangled_c_type, it_name, it_ret_tmp)
+      result += self.stmt(node.body)
+      result += '}'
+      return result
     elif isinstance(node, last.Return):
       result = 'return'
       if node.value:
@@ -1126,7 +1283,7 @@ class Compiler:
       for x in node.exprs:
         type = self.expr_type(self.current_function, x)
         c_type = self.get_mangled_c_type(type)
-        result += '%s$__del__(%s);' % (c_type, self.expr(x))
+        result += '%s$__del__(&%s);' % (c_type, self.expr(x))
       return result
     elif isinstance(node, last.Assign):
       if isinstance(node.lhs, last.TupleAssign):
@@ -1134,9 +1291,7 @@ class Compiler:
         rhs_type = self.expr_type(self.current_function, node.rhs)
         field_types = [x.type for x in rhs_type.members]
         struct = self.tuple_struct_for_types(field_types)
-        global tmp_var_counter
-        tmp_var_counter += 1
-        tmp = '$%d' % tmp_var_counter
+        tmp = get_tmp_var()
         result = 'struct %s %s = %s;\n' % (struct.name, tmp, self.expr(node.rhs))
         for i, x in enumerate(node.lhs.targets):
           result += '%s = %s._%d;' % (x.name, tmp, i)
@@ -1166,6 +1321,8 @@ class Compiler:
           return '%s = %s;' % (lhs, rhs)
       else:
         return ''
+    elif isinstance(node, last.Nonlocal):
+      return '/* NONLOCAL %s */;' % ', '.join(node.vars)
     elif isinstance(node, last.FuncDef):
       return '/* HOISTED %s */;' % node.name
     else:
@@ -1230,10 +1387,15 @@ class Compiler:
 
   def generate_struct(self, obj):
     assert isinstance(obj, last.Struct)
-    result = '\nstruct %s {\n' % obj.name
+    # HACK the #ifdefs are just so that we can hardcode some structs that are
+    # needed by the runtime also (and of course must be consistent).
+    result = '#ifndef DEFINED_%s\n' % obj.name
+    result += '#define DEFINED_%s\n' % obj.name
+    result += '\nstruct %s {\n' % obj.name
     for field in obj.members:
       result += '%s %s;\n' % (self.get_c_type(field.type), self.get_safe_c_name(field.name))
     result += '};\n'
+    result += '#endif\n'
     return result
 
   def generate_struct_constructor(self, obj):
@@ -1287,6 +1449,7 @@ class Compiler:
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 struct $Str {
   char* ptr;
   int64_t len;
@@ -1305,8 +1468,8 @@ struct $Str $Str$__add__(struct $Str a, struct $Str b) {
   memcpy(p + a.len, b.ptr, b.len + 1);
   return (struct $Str){p, a.len + b.len};
 }
-void $Str$__del__(struct $Str self) {
-  free(self.ptr);
+void $Str$__del__(struct $Str* self) {
+  free(self->ptr);
 }
 
 #define double$__lit__(a) (a)
@@ -1318,6 +1481,53 @@ void $Str$__del__(struct $Str self) {
 #define int32_t$__sub__(a, b) ((a)-(b))
 #define int32_t$__mul__(a, b) ((a)*(b))
 #define int32_t$__div__(a, b) ((a)/(b))
+
+#ifndef DEFINED_$List$int32_t
+#define DEFINED_$List$int32_t
+struct $List$int32_t;
+struct $List$int32_t {
+  int32_t* ptr;
+  int64_t len;
+  int64_t cap;
+};
+#endif
+
+int32_t $List$int32_t$__getitem__(struct $List$int32_t* L, int64_t at);
+void $List$int32_t$__del__(struct $List$int32_t* L);
+void $List$int32_t$reserve(struct $List$int32_t* L, int64_t cap);
+void $List$int32_t$append(struct $List$int32_t* L, int32_t value);
+
+struct $Tuple$_Bool$int64_t {
+  _Bool _0;
+  int64_t _1;
+};
+
+struct $Range {
+  int64_t start;
+  int64_t stop;
+  int64_t step;
+};
+
+struct $RangeIter {
+  struct $Range* range;
+  int64_t cur;
+};
+
+typedef struct $Tuple$_Bool$int64_t $RangeIterReturn;
+typedef int64_t $RangeIterValue;
+
+struct $RangeIter $Range$__iter__(struct $Range* self) {
+  return (struct $RangeIter){self, self->start};
+}
+
+struct $Tuple$_Bool$int64_t $RangeIter$__next__(struct $RangeIter* iter) {
+  if (iter->cur >= iter->range->stop) {
+    return (struct $Tuple$_Bool$int64_t){0};
+  }
+  int64_t ret = iter->cur;
+  iter->cur += iter->range->step;
+  return (struct $Tuple$_Bool$int64_t){1, ret};
+}
 
 static void printint(int x) {
   printf("%d\n", x);
@@ -1382,6 +1592,41 @@ static void printstr(struct $Str s) {
             f.write(' = %s' % self.expr(obj.init))
           f.write(';\n')
 
+      if self.have_error: return
+
+      header('late implementations')
+      f.write(r'''
+int32_t $List$int32_t$__getitem__(struct $List$int32_t* L, int64_t at) {
+  assert(at >= 0 && at < L->len);
+  return L->ptr[at];
+}
+
+void $List$int32_t$__del__(struct $List$int32_t* L) {
+  free(L->ptr);
+  L->ptr = NULL;
+  L->len = 0;
+  L->cap = 0;
+}
+
+void $List$int32_t$reserve(struct $List$int32_t* L, int64_t cap) {
+  if (L->cap < cap) {
+    int32_t* newp = malloc(sizeof(int32_t) * cap);
+    memcpy(newp, L->ptr, sizeof(int32_t) * L->len);
+    // memset rest?
+    free(L->ptr);
+    L->ptr = newp;
+    L->cap = cap;
+  }
+}
+
+void $List$int32_t$append(struct $List$int32_t* L, int32_t value) {
+  if (L->len == L->cap) {
+    $List$int32_t$reserve(L, L->cap < 16 ? 16 : L->cap * 2);
+  }
+  L->ptr[L->len++] = value;
+}
+''')
+
       header('function implementations')
       for n,ste in self.globals.items():
         obj = ste.ref_node
@@ -1438,7 +1683,7 @@ def do_tests(parser, test_list, update):
     err = (node, msg)
 
   for t in test_list:
-    print(t)
+    #print(t)
     if '.disabled.' in t:
       disabled_list.append(t)
       continue
