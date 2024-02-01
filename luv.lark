@@ -3,7 +3,8 @@
 
 start: (_NEWLINE | stmt)*
 
-funcdef: "def" [returntype] name "(" [parameters] ")" ":" suite
+funcdef: "def" [returntype] (name | single_dot_name) "(" [parameters] ")" ":" suite
+single_dot_name: name "." name
 
 parameters: paramvalue ("," paramvalue)* ","?
 ?paramvalue: typedparam ("=" test)?

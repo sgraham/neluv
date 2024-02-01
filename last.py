@@ -99,6 +99,11 @@ class UpvalBindings:  # Not AstNode
     upval_binding_counter += 1
 
 @dataclass
+class MethodName(AstNode):
+  struct: str
+  methodname: str
+
+@dataclass
 class FuncDef(AstNode):
   rtype: AstNode
   name: str

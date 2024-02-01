@@ -379,6 +379,9 @@ class ToAst(Transformer):
   def name(self, children):
     return children[0]
 
+  def single_dot_name(self, children):
+    return last.MethodName(children[0], children[1])
+
   def assign(self, children):
     return last.Assign(children[0], children[1])
 
@@ -485,6 +488,11 @@ class Typer:
   def __init__(self):
     pass
 
+class GeneratedStructInfo:
+  def __init__(self, node, struct):
+    self.node = node
+    self.struct = struct
+
 class Compiler:
   def __init__(self, filename, ast_root, error_callback=None):
     self.globals = {}  # values are SymTabEntry
@@ -502,9 +510,12 @@ class Compiler:
     self.error_callback = error_callback or default_error_at
     self.error_at = flag_error_and_tell_user
 
-    self.optional_structs = {}
-    self.tuple_structs = {}
-    self.list_structs = {}
+    self.generated_structs = {}
+
+    self.create_tuple_struct([_KEYWORDS['bool'], _KEYWORDS['i32']], None)  # For range().
+    self.create_range_structs()
+
+    self.HACK_generate_list_int32_methods = False  # TODO XXX
 
     self.ast_root = ast_root
     self.find_globals()
@@ -513,14 +524,8 @@ class Compiler:
     self.resolve_idents()
     self.infer_types()
 
-    for contained, (od, struct) in self.optional_structs.items():
-      self.globals[struct.name] = last.SymTabEntry(od, struct)
-
-    for contained, (tc, struct) in self.tuple_structs.items():
-      self.globals[struct.name] = last.SymTabEntry(tc, struct)
-
-    for contained, (node, struct) in self.list_structs.items():
-      self.globals[struct.name] = last.SymTabEntry(node, struct)
+    for contained, gsi in self.generated_structs.items():
+      self.globals[gsi.struct.name] = last.SymTabEntry(gsi.node, gsi.struct)
 
     self.current_function = None
 
@@ -547,8 +552,12 @@ class Compiler:
       self.func.symtab[node.name] = last.SymTabEntry(node.type, node, is_declared_local=True)
 
     def visit_For(self, node):
-      assert isinstance(node.it, last.Ident)
-      self.local(node.it)
+      if isinstance(node.it, list):
+        for x in node.it:
+          self.local(x)
+      else:
+        assert isinstance(node.it, last.Ident)
+        self.local(node.it)
 
     def local(self, ident):
       x = self.func.symtab.get(ident.name)
@@ -623,6 +632,8 @@ class Compiler:
 
   def insert_global_or_error(self, node):
     name = node.name
+    if isinstance(name, last.MethodName):
+      name = '%s__$__%s' % (name.struct, name.methodname)
     if self.globals.get(name):
       self.error_at(node, 'redefinition at global scope of "%s"' % name)
     ty = None
@@ -802,9 +813,29 @@ class Compiler:
     c_name_field_types = [self.get_mangled_c_type(t) for t in field_types]
     members = [last.TypedVar(t, '_%d' % i) for i,t in enumerate(field_types)]
     name = '$Tuple$' + '$'.join(str(x) for x in c_name_field_types)
+    if name in self.generated_structs:
+      return
     struct = last.Struct(name, members)
     struct.omit_constructor = True
-    self.tuple_structs[name] = (node, struct)
+    self.generated_structs[name] = GeneratedStructInfo(node, struct)
+
+  def create_range_structs(self):
+    # TODO: i32 vs i64
+    range_struct = self.create_struct('$Range', [
+        last.TypedVar(_KEYWORDS['i32'], 'start'),
+        last.TypedVar(_KEYWORDS['i32'], 'stop'),
+        last.TypedVar(_KEYWORDS['i32'], 'step')
+      ])
+
+    self.create_struct('$RangeIter', [
+      last.TypedVar(last.PointerDecl(range_struct), 'range'),
+      last.TypedVar(_KEYWORDS['i32'], 'cur')])
+
+  def create_struct(self, name, members, node=None, omit_constructor=True):
+    struct = last.Struct(name, members)
+    struct.omit_constructor = True
+    self.generated_structs[name] = GeneratedStructInfo(None, struct)
+    return struct
 
   class ResolveIdents:
     def __init__(self, parent):
@@ -834,7 +865,9 @@ class Compiler:
             self.parent.error_at(ident, 'previously typed as "%s", now "%s"' % (x.type, found))
 
     def visit_For(self, node):
-      assert isinstance(node.it, last.Ident), "todo: tuple iter"
+      if isinstance(node.it, last.Ident):
+        tuple_index = 0
+
       coll_type = self.parent.expr_type(self.cur_func, node.collection)
       if coll_type is _RANGE_TYPE:
         # HACK because literals are always i32 not i64, and no auto convert
@@ -857,13 +890,13 @@ class Compiler:
 
     def visit_OptionalDecl(self, od):
       c_base_type_name = self.parent.get_mangled_c_type(od.base)
-      if c_base_type_name not in self.parent.optional_structs:
+      if c_base_type_name not in self.parent.generated_structs:
         opt_struct_name = '$Opt$' + c_base_type_name
         members = [last.TypedVar(_KEYWORDS['bool'], 'has'),
                    last.TypedVar(od.base, 'val')]
         struct = last.Struct(opt_struct_name, members)
         struct.omit_constructor = True
-        self.parent.optional_structs[c_base_type_name] = (od, struct)
+        self.parent.generated_structs[c_base_type_name] = GeneratedStructInfo(od, struct)
 
     def visit_TupleCreate(self, tc):
       field_types = [self.parent.expr_type(self.cur_func, v) for v in tc.values]
@@ -879,7 +912,8 @@ class Compiler:
       name = '$List$' + base_type_name
       struct = last.Struct(name, members)
       struct.omit_constructor = True
-      self.parent.list_structs[base_type_name] = (node, struct)
+      self.parent.generated_structs[base_type_name] = GeneratedStructInfo(node, struct)
+      self.parent.HACK_generate_list_int32_methods = True
 
     def visit_ListComprehension(self, lc):
       elem_type = self.parent.expr_type(self.cur_func, lc.body.result)
@@ -938,9 +972,8 @@ class Compiler:
   def tuple_struct_for_types(self, field_types):
     c_name_field_types = [self.get_c_type(t) for t in field_types]
     name = '$Tuple$' + '$'.join(str(x) for x in c_name_field_types)
-    if name not in self.tuple_structs:
-      self.create_tuple_struct(field_types, None)
-    return self.tuple_structs[name][1]
+    self.create_tuple_struct(field_types, None)
+    return self.generated_structs[name].struct
 
   def tuple_struct_for_values(self, func, values):
     field_types = [self.expr_type(func, v) for v in values]
@@ -1022,13 +1055,16 @@ class Compiler:
       return last.ListType(self.expr_type(funcdef, expr.values[0]))
     elif isinstance(expr, last.GetAttr):
       lhs = self.expr_type(funcdef, expr.lhs)
-      assert isinstance(lhs, last.Type) and isinstance(lhs.base, last.Struct)
-      for x in lhs.base.members:
+      assert isinstance(lhs, last.Type)
+      cur = lhs.base
+      while isinstance(cur, last.PointerDecl):
+        cur = cur.base
+      assert isinstance(cur, last.Struct)
+      for x in cur.members:
         if x.name == expr.rhs:
           return x.type
       else:
-        assert '%s not found on %s' % (expr.rhs, lhs.base)
-      pass
+        assert '%s not found on %s' % (expr.rhs, cur)
     elif isinstance(expr, last.GetItem):
       obj = self.expr_type(funcdef, expr.obj)
       assert isinstance(obj, last.Type)
@@ -1097,11 +1133,11 @@ class Compiler:
     if isinstance(node, last.PointerDecl):
       return self.get_c_type(node.base) + '*'
     if isinstance(node, last.OptionalDecl):
-      return 'struct ' + self.optional_structs[self.get_mangled_c_type(node.base)][1].name
+      return 'struct ' + self.generated_structs[self.get_mangled_c_type(node.base)].struct.name
     if isinstance(node, last.Struct):
       return 'struct ' + node.name
     if isinstance(node, last.ListType):
-      return 'struct ' + self.list_structs[self.get_mangled_c_type(node.base)][1].name
+      return 'struct ' + self.generated_structs[self.get_mangled_c_type(node.base)].struct.name
     if isinstance(node, last.Type):
       return self.get_c_type(node.base)
     print('GET_C_TYPE', node)
@@ -1450,15 +1486,10 @@ class Compiler:
 
   def generate_struct(self, obj):
     assert isinstance(obj, last.Struct)
-    # HACK the #ifdefs are just so that we can hardcode some structs that are
-    # needed by the runtime also (and of course must be consistent).
-    result = '#ifndef DEFINED_%s\n' % obj.name
-    result += '#define DEFINED_%s\n' % obj.name
-    result += '\nstruct %s {\n' % obj.name
+    result = '\nstruct %s {\n' % obj.name
     for field in obj.members:
       result += '%s %s;\n' % (self.get_c_type(field.type), self.get_safe_c_name(field.name))
     result += '};\n'
-    result += '#endif\n'
     return result
 
   def generate_struct_constructor(self, obj):
@@ -1545,56 +1576,6 @@ void $Str$__del__(struct $Str* self) {
 #define int32_t$__mul__(a, b) ((a)*(b))
 #define int32_t$__div__(a, b) ((a)/(b))
 
-#ifndef DEFINED_$List$int32_t
-#define DEFINED_$List$int32_t
-struct $List$int32_t;
-struct $List$int32_t {
-  int32_t* ptr;
-  int64_t len;
-  int64_t cap;
-};
-#endif
-
-int32_t $List$int32_t$__getitem__(struct $List$int32_t* L, int64_t at);
-void $List$int32_t$__del__(struct $List$int32_t* L);
-void $List$int32_t$reserve(struct $List$int32_t* L, int64_t cap);
-void $List$int32_t$append(struct $List$int32_t* L, int32_t value);
-
-#ifndef DEFINED_$Tuple$_Bool$int32_t
-#define DEFINED_$Tuple$_Bool$int32_t
-struct $Tuple$_Bool$int32_t {
-  _Bool _0;
-  int32_t _1;
-};
-#endif
-
-struct $Range {
-  int32_t start;
-  int32_t stop;
-  int32_t step;
-};
-
-struct $RangeIter {
-  struct $Range* range;
-  int32_t cur;
-};
-
-typedef struct $Tuple$_Bool$int32_t $RangeIterReturn;
-typedef int32_t $RangeIterValue;
-
-struct $RangeIter $Range$__iter__(struct $Range* self) {
-  return (struct $RangeIter){self, self->start};
-}
-
-struct $Tuple$_Bool$int32_t $RangeIter$__next__(struct $RangeIter* iter) {
-  if (iter->cur >= iter->range->stop) {
-    return (struct $Tuple$_Bool$int32_t){0};
-  }
-  int32_t ret = iter->cur;
-  iter->cur += iter->range->step;
-  return (struct $Tuple$_Bool$int32_t){1, ret};
-}
-
 static void printint(int x) {
   printf("%d\n", x);
 }
@@ -1662,6 +1643,26 @@ static void printstr(struct $Str s) {
 
       header('late implementations')
       f.write(r'''
+// TODO: generate all this
+#define $RangeIterReturn struct $Tuple$_Bool$int32_t
+#define $RangeIterValue int32_t
+
+struct $RangeIter $Range$__iter__(struct $Range* self) {
+  return (struct $RangeIter){self, self->start};
+}
+
+struct $Tuple$_Bool$int32_t $RangeIter$__next__(struct $RangeIter* iter) {
+  if (iter->cur >= iter->range->stop) {
+    return (struct $Tuple$_Bool$int32_t){0};
+  }
+  int32_t ret = iter->cur;
+  iter->cur += iter->range->step;
+  return (struct $Tuple$_Bool$int32_t){1, ret};
+}
+''')
+
+      if self.HACK_generate_list_int32_methods:
+        f.write(r'''
 int32_t $List$int32_t$__getitem__(struct $List$int32_t* L, int64_t at) {
   assert(at >= 0 && at < L->len);
   return L->ptr[at];
@@ -1749,7 +1750,7 @@ def do_tests(parser, test_list, update):
     err = (node, msg)
 
   for t in test_list:
-    #print(t)
+    print(t)
     if '.disabled.' in t:
       disabled_list.append(t)
       continue

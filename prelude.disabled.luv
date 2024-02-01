@@ -1,0 +1,20 @@
+struct range:
+  int start
+  int stop
+  int step
+
+struct RangeIter:
+  *range obj
+  int cur
+
+def range.__iter__(*range self):
+  return RangeIter(self, self.start)
+
+def RangeIter.__next__(*RangeIter self):
+  if self.cur >= self.obj.stop:
+    return false, 0
+  ret = self.cur
+  self.cur += self.obj.step
+  return true, ret
+
+macro enumerate(seq):
