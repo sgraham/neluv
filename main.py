@@ -981,7 +981,7 @@ class Compiler:
           else:
             assert False, "todo"
           return self.tuple_struct_for_types([_KEYWORDS['bool'], value_type])
-          
+
         ste_in_globals = self.globals.get(expr.func.name)
         in_globals = ste_in_globals.ref_node
         if isinstance(in_globals, last.FuncDef):
@@ -1202,11 +1202,38 @@ class Compiler:
     elif isinstance(node, last.ListComprehension):
       result = '({'
       list_type = self.expr_type(self.current_function, node)
+      result_tmp = get_tmp_var()
+      result_list_type = self.get_c_type(list_type)
+      result_mangled_c_type = self.get_mangled_c_type(list_type)
+      result += '%s %s = {0};' % (result_list_type, result_tmp)
       for f in node.body.fors:
-        tmp = get_tmp_var()
+        iter_tmp = get_tmp_var()
+        thing_tmp = get_tmp_var()
+        it_ret_tmp = get_tmp_var()
+
         thing_type = self.expr_type(self.current_function, f.thing)
-        iter_type = self.get_mangled_c_type(thing_type) + '$Iter'
-        result += '%s %s' % (iter_type, tmp)
+        thing_c_type = self.get_c_type(thing_type)
+        # TODO: not sure about make a local copy of the thing (i.e. `range(5)`)
+        result += '%s %s = %s;' % (thing_c_type, thing_tmp, self.expr(f.thing))
+        thing_mangled_c_type = self.get_mangled_c_type(thing_type)
+        # TODO: probably expr_type and then c_type of that.
+        iter_type = '%sIter' % thing_mangled_c_type
+        result += 'struct %s %s = %s$__iter__(&%s);' % (
+            iter_type, iter_tmp, thing_mangled_c_type, thing_tmp)
+
+        assert isinstance(f.its, last.Ident), "todo"
+        it_name = f.its.name
+        result += '%sIterReturn %s = {0};' % (thing_mangled_c_type, it_ret_tmp)
+        result += 'for(;;) {'
+        result += '%s = %sIter$__next__(&%s);' % (it_ret_tmp, thing_mangled_c_type, iter_tmp)
+        result += 'if (!(%s._0)) break;' % it_ret_tmp
+        result += '%sIterValue %s = %s._1;' % (thing_mangled_c_type, it_name, it_ret_tmp)
+
+        result += '%s$append(&%s, %s);' % (
+            result_mangled_c_type, result_tmp, self.expr(node.body.result))
+        result += '}'
+
+      result += result_tmp + ';'
       result += '})'
       return result
     elif isinstance(node, last.List):
