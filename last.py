@@ -118,6 +118,15 @@ class FuncDef(AstNode):
     self.upval_bindings = {}  # names are funcname, values are UpvalBindings
 
 @dataclass
+class ImportMacros(AstNode):
+  filename: str
+
+@dataclass
+class MacroDef(AstNode):
+  name: str
+  pyfunc: object
+
+@dataclass
 class FuncType(Type):
   rtype: AstNode
   params: list[AstNode]

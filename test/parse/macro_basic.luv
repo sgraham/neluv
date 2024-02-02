@@ -1,0 +1,16 @@
+import_macros "my.mac.py"
+
+def main():
+  x = test()
+  printint(x)
+---
+TopLevel(body=Block(entries=[ImportMacros(filename=String(value='my.mac.py')),
+                             FuncDef(rtype=Type(base='auto'),
+                                     name='main',
+                                     params=[],
+                                     body=Block(entries=[Assign(lhs=Ident(name='x'),
+                                                                rhs=FuncCall(func=Ident(name='test'),
+                                                                             args=[])),
+                                                         FuncCall(func=Ident(name='printint'),
+                                                                  args=[Ident(name='x')])]),
+                                     hidden=False)]))

@@ -9,7 +9,6 @@ syn case match
 syn keyword     luvKeyword       alloc
 syn keyword     luvKeyword       and
 syn keyword     luvKeyword       as
-syn keyword     luvKeyword       block
 syn keyword     luvKeyword       break
 syn keyword     luvKeyword       check
 syn keyword     luvKeyword       continue
@@ -21,7 +20,9 @@ syn keyword     luvKeyword       false
 syn keyword     luvKeyword       for
 syn keyword     luvKeyword       global
 syn keyword     luvKeyword       if
+syn keyword     luvKeyword       import_macros
 syn keyword     luvKeyword       in
+syn keyword     luvKeyword       macro
 syn keyword     luvKeyword       not
 syn keyword     luvKeyword       nonlocal
 syn keyword     luvKeyword       null
@@ -46,6 +47,9 @@ hi def link     luvType Type
 
 syn keyword     luvBuiltin range iter next stack heap enumerate
 hi def link     luvBuiltin Function
+
+syn keyword     luvMacroHelper parse insert_global have_global args block
+hi def link     luvMacroHelper PreProc
 
 syn region	luvPreProc	start="^\s*\zs\%(%:\|#\)" skip="\\$" end="$" keepend contains=ALLBUT,@Spell
 syn region	luvPreProc	start="\%(%:\|#\){" end="}" keepend contains=ALLBUT,@Spell,luvPreProc

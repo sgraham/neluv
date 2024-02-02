@@ -6,6 +6,11 @@ start: (_NEWLINE | stmt)*
 funcdef: "def" [returntype] (name | single_dot_name) "(" [parameters] ")" ":" suite
 single_dot_name: name "." name
 
+// This is a big hack because I couldn't figure out how to slurp everything
+// under a `macro blah:` to pass to python. If/when the parser is rewritten to
+// be faster, these should be inline, not in separate files.
+import_macros_stmt: "import_macros" string
+
 parameters: paramvalue ("," paramvalue)* ","?
 ?paramvalue: typedparam ("=" test)?
 ?typedparam: typed_var
@@ -13,13 +18,8 @@ parameters: paramvalue ("," paramvalue)* ","?
 
 lambdef: "lambda" [lambda_params] ":" test
 lambdef_nocond: "lambda" [lambda_params] ":" test_nocond
-lambda_params: lambda_paramvalue ("," lambda_paramvalue)* ["," [lambda_starparams | lambda_kwparams]]
-          | lambda_starparams
-          | lambda_kwparams
+lambda_params: lambda_paramvalue ("," lambda_paramvalue)*
 ?lambda_paramvalue: name ("=" test)?
-lambda_starparams: "*" [name]  ("," lambda_paramvalue)* ["," [lambda_kwparams]]
-lambda_kwparams: "**" name ","?
-
 
 ?stmt: compound_stmt | simple_stmt
 ?simple_stmt: small_stmt (";" small_stmt)* [";"] _NEWLINE
@@ -74,8 +74,9 @@ global_stmt: "global" name ("," name)*
 nonlocal_stmt: "nonlocal" name ("," name)*
 assert_stmt: "assert" test ["," test]
 
-?compound_stmt: if_stmt | while_stmt | for_stmt | macro_with_block_stmt
-              | with_stmt | funcdef | structdef | uniondef
+?compound_stmt: if_stmt | while_stmt | for_stmt | with_stmt
+                | funcdef | structdef | uniondef | macro_with_block_stmt
+                | import_macros_stmt
 if_stmt: "if" (test | optional_unwrap) ":" suite elifs ["else" ":" suite]
 optional_unwrap: test "as" name
 elifs: elif_*
@@ -212,8 +213,3 @@ _EXP: ("e"|"E") ["+" | "-"] _SPECIAL_DEC
 DECIMAL: "." _SPECIAL_DEC | _SPECIAL_DEC "." _SPECIAL_DEC?
 FLOAT_NUMBER.2: _SPECIAL_DEC _EXP | DECIMAL _EXP?
 IMAG_NUMBER.2: (_SPECIAL_DEC      | FLOAT_NUMBER) ("J" | "j")
-
-
-// Comma-separated list (with an optional trailing comma)
-cs_list{item}: item ("," item)* ","?
-_cs_list{item}: item ("," item)* ","?

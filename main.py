@@ -1,6 +1,6 @@
 import dataclasses
 import glob
-import importlib
+import inspect
 import os
 import pprint
 import subprocess
@@ -140,9 +140,6 @@ X.Y.Z.W q = 1
 funcy(x)
 '''
 
-_PREPROC_GLOBALS = {}
-_PREPROC_LOCALS = {}
-_MACROS = {}
 _KEYWORDS = {
   'auto': last.Type('auto'),
   'bool': last.Type('bool'),
@@ -187,13 +184,6 @@ def get_tmp_var():
   global tmp_var_counter
   tmp_var_counter += 1
   return '$_%d' % tmp_var_counter
-
-def load_builtin_macros():
-  for x in ["print"]:
-    mod = importlib.import_module(x)
-    if _MACROS.get(x):
-      raise RuntimeError('conflicting definition of builtin macro for %s' % x)
-    _MACROS[x] = getattr(mod, x)
 
 def add_meta(f, data, children, meta):
   ret = f(children)
@@ -403,6 +393,9 @@ class ToAst(Transformer):
                           children[3])
     assert False, "unhandled case in funcdef"
 
+  def import_macros_stmt(self, children):
+    return last.ImportMacros(children[0])
+
   def funcdecl(self, children):
     type = children[0] or _KEYWORDS['auto']
     params = children[1]
@@ -494,7 +487,7 @@ class GeneratedStructInfo:
     self.struct = struct
 
 class Compiler:
-  def __init__(self, filename, ast_root, error_callback=None):
+  def __init__(self, filename, ast_root, parser, error_callback=None):
     self.globals = {}  # values are SymTabEntry
     self.filename = filename
 
@@ -518,11 +511,30 @@ class Compiler:
     self.HACK_generate_list_int32_methods = False  # TODO XXX
 
     self.ast_root = ast_root
+    self.parser = parser
+
+    #print('START ------------------')
+    #pprint.pprint(self.ast_root)
+
     self.find_globals()
+    #print('AFTER FIND_GLOBALS ------------------')
+    #pprint.pprint(self.ast_root)
+
     self.build_function_symtabs()
+    #print('AFTER SYMTABS ------------------')
+    #pprint.pprint(self.ast_root)
+
     self.hoist_nested_functions()
+    #print('AFTER HOIST ------------------')
+    #pprint.pprint(self.ast_root)
+
     self.resolve_idents()
+    #print('AFTER RESOLVE IDENTS ------------------')
+    #pprint.pprint(self.ast_root)
+
     self.infer_types()
+    #print('AFTER INFER TYPES ------------------')
+    #pprint.pprint(self.ast_root)
 
     for contained, gsi in self.generated_structs.items():
       self.globals[gsi.struct.name] = last.SymTabEntry(gsi.node, gsi.struct)
@@ -576,6 +588,29 @@ class Compiler:
           for x in node.lhs.targets:
             self.local(x)
 
+    def visit_FuncCall(self, node):
+      if isinstance(node.func, last.Ident):
+        glob = self.parent.globals.get(node.func.name)
+        if glob and isinstance(glob.ref_node, last.MacroDef):
+          #print("CALLING MACRO", node.func.name)
+          f = glob.ref_node
+          class Macro:
+            def __init__(s):
+              s.args = node.args
+              s.block = None
+            def parse_expr(s, code):
+              tree = self.parent.parser.parse(code + '\n')
+              ast = ToAst().transform(tree)
+              return ast.body.entries[0]
+            def parse_toplevel(s, code):
+              tree = self.parent.parser.parse(code + '\n')
+              ast = ToAst().transform(tree)
+              return ast
+          macro = Macro()
+          result = f.pyfunc(macro)
+          #print('RETURING A THING')
+          return result
+
   class ScanForNonlocal:
     def __init__(self, func, parent):
       self.func = func
@@ -601,11 +636,16 @@ class Compiler:
       self.impl(self.start)
 
     def impl(self, node):
+      to_return = None
+
       if hasattr(node, 'tag_for_visit') and getattr(node, 'tag_for_visit') == self.visit_tag:
         return
 
       x = getattr(self.visitor, 'visit_' + node.__class__.__name__, None)
-      if x: x(node)
+      if x:
+        result = x(node)
+        if result is not None:
+          to_return = result
 
       node.tag_for_visit = self.visit_tag
 
@@ -614,21 +654,25 @@ class Compiler:
           if isinstance(node, dnct):
             x = getattr(self.visitor, 'after_' + node.__class__.__name__, None)
             if x: x(node)
-            return
+            return to_return
 
       for f in dataclasses.fields(node):
         field = getattr(node, f.name)
 
         if isinstance(field, last.AstNode):
-          self.impl(field)
+          ret = self.impl(field)
+          if ret is not None:
+            setattr(node, f.name, ret)
         elif isinstance(field, list):
-          for lx in field:
+          for i, lx in enumerate(field):
             if isinstance(lx, last.AstNode):
-              self.impl(lx)
+              ret = self.impl(lx)
+              if ret is not None:
+                field[i] = ret
 
       x = getattr(self.visitor, 'after_' + node.__class__.__name__, None)
       if x: x(node)
-      return
+      return to_return
 
   def insert_global_or_error(self, node):
     name = node.name
@@ -641,6 +685,22 @@ class Compiler:
       ty = node.type
     self.globals[name] = last.SymTabEntry(ty, node, is_global=True)
 
+  def load_macros(self, fn):
+    glob = {}
+    loc = {}
+    rel_fn = os.path.join(os.path.split(self.filename)[0], fn)
+    with open(rel_fn, 'r') as f:
+      exec(f.read(), glob, loc)
+    for name,func in loc.items():
+      if inspect.isfunction(func):
+        co_mem = inspect.getmembers(func.__code__)
+        for n,v in co_mem:
+          if n == 'co_argcount' and v == 1:
+            for l,o in loc.items():
+              func.__globals__[l] = o
+            self.insert_global_or_error(last.MacroDef(name, func))
+            break
+
   def find_globals(self):
     assert isinstance(self.ast_root, last.TopLevel), self.ast_root
 
@@ -652,6 +712,8 @@ class Compiler:
       elif isinstance(tl, last.Assign) and isinstance(tl.lhs, last.Ident):
         # Handled below.
         pass
+      elif isinstance(tl, last.ImportMacros):
+        self.load_macros(tl.filename.value)
       else:
         self.error_at(tl, 'unexpected at top level %s' % tl)
 
@@ -1750,7 +1812,7 @@ def do_tests(parser, test_list, update):
     err = (node, msg)
 
   for t in test_list:
-    print(t)
+    #print(t)
     if '.disabled.' in t:
       disabled_list.append(t)
       continue
@@ -1764,12 +1826,12 @@ def do_tests(parser, test_list, update):
       got = pprint.pformat(ast)
     elif t.startswith('test/type'):
       err = None
-      c = Compiler(t, ast, error_callback=tt_error_callback)
+      c = Compiler(t, ast, parser, error_callback=tt_error_callback)
       c_file = os.path.splitext(t)[0] + '.c'
       c.compile(c_file)
       got = '!\n%s:%d:%d:%s' % (t, err[0].line, err[0].column, err[1])
     elif t.startswith('test/run'):
-      c = Compiler(t, ast)
+      c = Compiler(t, ast, parser)
       c_file = os.path.splitext(t)[0] + '.c'
       #print(c_file)
       c.compile(c_file)
@@ -1802,9 +1864,6 @@ def do_tests(parser, test_list, update):
 def main():
   parser = Parser()
 
-  load_builtin_macros()
-  #print(_MACROS)
-
   if len(sys.argv) >= 2 and sys.argv[1] == 'test':
     do_tests(parser, sys.argv[2:], update=False)
   elif len(sys.argv) >= 2 and sys.argv[1] == 'test_update':
@@ -1817,7 +1876,7 @@ def main():
     ast = ToAst().transform(tree)
     import pprint
     pprint.pprint(ast, stream=sys.stderr)
-    c = Compiler(sys.argv[1], ast)
+    c = Compiler(sys.argv[1], ast, parser)
     c_file = os.path.splitext(sys.argv[1])[0] + '.c'
     c.compile(c_file)
     dyibicc(c_file)

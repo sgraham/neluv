@@ -1,0 +1,12 @@
+import_macros "macro_basic.mac.py"
+
+def f():
+  printstr("hi")
+  return 2
+
+def main():
+  x = test(4,5)
+  printint(x)
+---
+hi
+12
