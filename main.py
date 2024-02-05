@@ -982,8 +982,13 @@ class Compiler:
         if not isinstance(rhs_type, last.PointerDecl):
           self.error_at(expr.obj, 'expecting pointer type for dereference')
         return rhs_type.base
+      elif expr.op.name == '&':
+        # TODO: lval context
+        return last.PointerDecl(rhs_type)
+      elif expr.op.name == '-' and rhs_type is _KEYWORDS['i32']:
+        return _KEYWORDS['i32']
       else:
-        assert False, "unhandled unary op %s" % op
+        assert False, "unhandled unary op %s" % expr.op
     elif isinstance(expr, last.Ident):
       if ste := funcdef.symtab.get(expr.name):
         return ste.type
@@ -1015,10 +1020,12 @@ class Compiler:
         if x.name == expr.rhs:
           return x.type
       else:
-        assert '%s not found on %s' % (expr.rhs, cur)
+        self.error_at(expr, '"%s" not found on "%s"' % (expr.rhs, cur.name))
     elif isinstance(expr, last.GetItem):
       obj = self.expr_type(funcdef, expr.obj)
       assert isinstance(obj, last.Type)
+      while isinstance(obj, last.PointerDecl):
+        obj = obj.base
       return obj.base
     elif isinstance(expr, last.Tuple):
       return self.tuple_struct_for_values(funcdef, expr.items).cached_type()
@@ -1264,7 +1271,7 @@ class Compiler:
         l_type = self.expr_type(self.current_function, cur_l)
         r_type = self.expr_type(self.current_function, cur_r)
         if l_type is not r_type:
-          error_at(cur_op, 'can\'t "%s" with lhs=%s, rhs=%s' % (cur_op, l_type, r_type))
+          self.error_at(node, 'can\'t "%s" with lhs=%s, rhs=%s' % (cur_op, l_type, r_type))
         c_type = self.get_c_type(l_type)
         tmp = get_tmp_var()
         tmp_ident = last.Ident(tmp)

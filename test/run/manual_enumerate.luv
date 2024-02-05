@@ -1,0 +1,47 @@
+struct MyEnum:
+  *[]int seq
+  int cur
+
+def walk_next(*MyEnum myenum):
+  if myenum.cur >= myenum.seq.len:
+    return false, (0, 0)
+  ret = (myenum.cur, myenum.seq[myenum.cur])
+  myenum.cur = myenum.cur + 1
+  return true, ret
+
+def main():
+  L = [5,4,3]
+  enumer = MyEnum(&L, 0)
+
+  wee = walk_next(&enumer)
+  printbool(wee._0)
+  printint(wee._1._0)
+  printint(wee._1._1)
+
+  wee = walk_next(&enumer)
+  printbool(wee._0)
+  printint(wee._1._0)
+  printint(wee._1._1)
+
+  wee = walk_next(&enumer)
+  printbool(wee._0)
+  printint(wee._1._0)
+  printint(wee._1._1)
+
+  wee = walk_next(&enumer)
+  printbool(wee._0)
+  printint(wee._1._0)
+  printint(wee._1._1)
+---
+true
+0
+5
+true
+1
+4
+true
+2
+3
+false
+0
+0

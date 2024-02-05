@@ -1,0 +1,35 @@
+struct Stuff:
+  *[]int ptr
+
+struct Stuff2:
+  * *[]int ptr  // TODO: tokenizer vs. power
+
+def func(*Stuff s):
+  printint(s.ptr[1])
+
+def func2(*Stuff2 s, int at):
+  printint(s.ptr[at] * 10)
+
+def main():
+  L = [10, 20, 30]
+  printint(L[1])
+  M = &L
+  printint(M[2])
+  N = &M
+  printint(N[0])
+
+  s = Stuff(&L)
+  func(&s)
+
+  s2 = Stuff2(&M)
+  func2(&s2, 0)
+  func2(&s2, 1)
+  func2(&s2, 2)
+---
+20
+30
+10
+20
+100
+200
+300
