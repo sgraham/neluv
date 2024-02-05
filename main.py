@@ -599,6 +599,17 @@ class Compiler:
             resolved = self.globals.get(p.type.name)
             if resolved.ref_node and isinstance(resolved.ref_node, last.Struct):
               p.type = resolved.ref_node.cached_type()
+          elif isinstance(p.type, last.PointerDecl):
+            t = p.type
+            prev = None
+            while isinstance(t, last.PointerDecl):
+              prev = t
+              t = t.base
+            if isinstance(t, last.Ident):
+              resolved = self.globals.get(t.name)
+              if resolved.ref_node and isinstance(resolved.ref_node, last.Struct):
+                # TODO: rationalize why are some Type and this one directly Struct
+                prev.base = resolved.ref_node
 
   def find_func_defs(self, start, top_level_only=False):
     class FindFuncDef:
@@ -999,7 +1010,7 @@ class Compiler:
       cur = lhs.base
       while isinstance(cur, last.PointerDecl):
         cur = cur.base
-      assert isinstance(cur, last.Struct)
+      assert isinstance(cur, last.Struct), str(cur)
       for x in cur.members:
         if x.name == expr.rhs:
           return x.type
