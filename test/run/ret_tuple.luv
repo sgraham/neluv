@@ -1,0 +1,40 @@
+def single():
+  return 1, 2
+
+def nested():
+  return true, (3,4)
+
+def triple():
+  return false, (1,2), ("a", false, (3,4))
+
+def main():
+  s = single()
+  printint(s._0)
+  printint(s._1)
+
+  n = nested()
+  printbool(n._0)
+  printint(n._1._0)
+  printint(n._1._1)
+
+  t = triple()
+  printbool(t._0)
+  printint(t._1._0)
+  printint(t._1._1)
+  printstr(t._2._0)
+  printbool(t._2._1)
+  printint(t._2._2._0)
+  printint(t._2._2._1)
+---
+1
+2
+true
+3
+4
+false
+1
+2
+a
+false
+3
+4

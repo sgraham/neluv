@@ -1,9 +1,13 @@
 import last
 import pprint
 
-#struct Enumerator_ListInt:
-  #*[]int seq
-  #int cur
+'''
+struct Enumerator_ListInt:
+  *[]int seq
+  int cur
+
+def Enumerator_ListInt
+'''
 
 def enumerate(macro):
   pprint.pprint(macro.args)

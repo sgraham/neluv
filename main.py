@@ -134,10 +134,10 @@ class ToAst(Transformer):
     return children
 
   def testlist_tuple(self, children):
-    return last.TupleCreate(children)
+    return last.Tuple(children)
 
   def tuple(self, children):
-    return last.TupleAssign(children)
+    return last.Tuple(children)
 
   def getattr(self, children):
     return last.GetAttr(children[0], children[1])
@@ -454,9 +454,9 @@ class Compiler:
     def visit_Assign(self, node):
       if isinstance(node.lhs, last.Ident):
         self.local(node.lhs)
-      elif isinstance(node.lhs, last.TupleAssign):
-        if all(isinstance(x, last.Ident) for x in node.lhs.targets):
-          for x in node.lhs.targets:
+      elif isinstance(node.lhs, last.Tuple):
+        if all(isinstance(x, last.Ident) for x in node.lhs.items):
+          for x in node.lhs.items:
             self.local(x)
 
   class ScanForNonlocal:
@@ -792,10 +792,10 @@ class Compiler:
       if isinstance(assign.lhs, last.Ident):
         rhs_type = self.parent.expr_type(self.parent.current_function, assign.rhs)
         self.resolve_ident(assign.lhs, rhs_type, tuple_index=None)
-      elif isinstance(assign.lhs, last.TupleAssign):
-        assert all(isinstance(x, last.Ident) for x in assign.lhs.targets)
+      elif isinstance(assign.lhs, last.Tuple):
+        assert all(isinstance(x, last.Ident) for x in assign.lhs.items)
         rhs_type = self.parent.expr_type(self.parent.current_function, assign.rhs)
-        for i,x in enumerate(assign.lhs.targets):
+        for i,x in enumerate(assign.lhs.items):
           self.resolve_ident(x, rhs_type, tuple_index=i)
 
     def visit_OptionalDecl(self, od):
@@ -808,8 +808,8 @@ class Compiler:
         struct.omit_constructor = True
         self.parent.generated_structs[c_base_type_name] = GeneratedStructInfo(od, struct)
 
-    def visit_TupleCreate(self, tc):
-      field_types = [self.parent.expr_type(self.parent.current_function, v) for v in tc.values]
+    def visit_Tuple(self, tc):
+      field_types = [self.parent.expr_type(self.parent.current_function, v) for v in tc.items]
       self.parent.create_tuple_struct(field_types, tc)
 
     def make_list_struct(self, elem_type, node):
@@ -902,7 +902,7 @@ class Compiler:
     return finder.result
 
   def tuple_struct_for_types(self, field_types):
-    c_name_field_types = [self.get_c_type(t) for t in field_types]
+    c_name_field_types = [self.get_mangled_c_type(t) for t in field_types]
     name = '$Tuple$' + '$'.join(str(x) for x in c_name_field_types)
     self.create_tuple_struct(field_types, None)
     return self.generated_structs[name].struct
@@ -1004,10 +1004,8 @@ class Compiler:
       obj = self.expr_type(funcdef, expr.obj)
       assert isinstance(obj, last.Type)
       return obj.base
-    elif isinstance(expr, last.TupleCreate):
-      return self.tuple_struct_for_values(funcdef, expr.values)
-    elif isinstance(expr, last.TupleAssign):
-      return '/*TUPLE ASSIGN TYPE*/'
+    elif isinstance(expr, last.Tuple):
+      return self.tuple_struct_for_values(funcdef, expr.items)
     assert False, "unhandled expr_type %s" % expr
 
   def resolve_function_return_type(self, fd):
@@ -1246,11 +1244,9 @@ class Compiler:
         cur_r = node.chain[i+1]
       result += cur_l.name + ';})'
       return result
-    elif isinstance(node, last.TupleCreate):
-      struct = self.tuple_struct_for_values(self.current_function, node.values)
-      return '(struct %s){' % struct.name + ','.join(self.expr(v) for v in node.values) + '}'
-    elif isinstance(node, last.TupleAssign):
-      return '/*TupleAssign, should be handled in stmt() Assign?*/'
+    elif isinstance(node, last.Tuple):
+      struct = self.tuple_struct_for_values(self.current_function, node.items)
+      return '(struct %s){' % struct.name + ','.join(self.expr(v) for v in node.items) + '}'
     else:
       raise RuntimeError("unhandled expr node %s" % node)
 
@@ -1320,14 +1316,14 @@ class Compiler:
         result += '%s$__del__(&%s);' % (c_type, self.expr(x))
       return result
     elif isinstance(node, last.Assign):
-      if isinstance(node.lhs, last.TupleAssign):
-        assert all(isinstance(x, last.Ident) for x in node.lhs.targets)
+      if isinstance(node.lhs, last.Tuple):
+        assert all(isinstance(x, last.Ident) for x in node.lhs.items)
         rhs_type = self.expr_type(self.current_function, node.rhs)
         field_types = [x.type for x in rhs_type.members]
         struct = self.tuple_struct_for_types(field_types)
         tmp = get_tmp_var()
         result = 'struct %s %s = %s;\n' % (struct.name, tmp, self.expr(node.rhs))
-        for i, x in enumerate(node.lhs.targets):
+        for i, x in enumerate(node.lhs.items):
           result += '%s = %s._%d;' % (x.name, tmp, i)
         return result
       else:
@@ -1706,7 +1702,7 @@ def do_tests(parser, test_list, update):
     err = (node, msg)
 
   for t in test_list:
-    #print(t)
+    print(t)
     if '.disabled.' in t:
       disabled_list.append(t)
       continue

@@ -252,12 +252,8 @@ class Union(AstNode):
   members: list[Type]
 
 @dataclass
-class TupleCreate(AstNode):
-  values: list[AstNode]
-
-@dataclass
-class TupleAssign(AstNode):
-  targets: list[AstNode]
+class Tuple(AstNode):
+  items: list[AstNode]
 
 @dataclass
 class List(AstNode):
