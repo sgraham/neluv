@@ -5,7 +5,7 @@ def nested():
   return true, (3,4)
 
 def triple():
-  return false, (1,2), ("a", false, (3,4))
+  return false, (1,2), ("abc", false, (3,4))
 
 def main():
   s = single()
@@ -34,7 +34,7 @@ true
 false
 1
 2
-a
+abc
 false
 3
 4

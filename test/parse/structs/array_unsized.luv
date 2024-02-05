@@ -2,5 +2,5 @@ struct X:
   []int array
 ---
 TopLevel(body=Block(entries=[Struct(name='X',
-                                    members=[TypedVar(type=SliceDecl(base=Type(base='i32')),
+                                    members=[TypedVar(type=ListDecl(base=Type(base='i32')),
                                                       name='array')])]))

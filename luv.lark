@@ -28,7 +28,7 @@ expr_stmt: testlist_expr
 assign_stmt: augassign | assign
 
 ?var_decl_type : name_with_package
-               | "[" "]" var_decl_type -> slice_decl
+               | "[" "]" var_decl_type -> list_decl
                | "[" number "]" var_decl_type -> fixed_array_decl
                | "*" var_decl_type -> pointer_decl
                | "?" var_decl_type -> optional_decl

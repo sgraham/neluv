@@ -164,8 +164,8 @@ class ToAst(Transformer):
   def comp_op(self, children):
     return children[0]
 
-  def slice_decl(self, children):
-    return last.SliceDecl(children[0])
+  def list_decl(self, children):
+    return last.ListDecl(children[0])
 
   def fixed_array_decl(self, children):
     return last.FixedArrayDecl(size=children[0], base=children[1])
@@ -757,22 +757,25 @@ class Compiler:
       self.parent.current_function = func
 
     def resolve_ident(self, ident, rhs_type, tuple_index):
-      found = rhs_type
       if tuple_index is not None:
-        found = found.members[tuple_index].type
+        assert isinstance(rhs_type, last.Type), str(rhs_type)
+        assert isinstance(rhs_type.base, last.Struct), str(rhs_type.base)
+        rhs_type = rhs_type.base
+        rhs_type = rhs_type.members[tuple_index].type
       x = self.parent.current_function.symtab.get(ident.name)
       assert x, "ident not in scope? '%s'" % ident.name
       if x.type is _KEYWORDS['auto']:
-        x.type = found
+        x.type = rhs_type
       else:
-        if x.type != found:
+        if x.type != rhs_type:
           if (isinstance(x.type, last.OptionalDecl) and
-              (x.type.base is found or found is _KEYWORDS['null'])):
+              (x.type.base is rhs_type or rhs_type is _KEYWORDS['null'])):
             # Allow coercion from contained type of optional to the optional,
             # or from null to any optional.
             pass
           else:
-            self.parent.error_at(ident, 'previously typed as "%s", now "%s"' % (x.type, found))
+            self.parent.error_at(
+                ident, 'previously typed as "%s", now "%s"' % (x.type, rhs_type))
 
     def visit_For(self, node):
       if isinstance(node.it, last.Ident):
@@ -945,7 +948,7 @@ class Compiler:
             value_type = _KEYWORDS['i32']
           else:
             assert False, "todo"
-          return self.tuple_struct_for_types([_KEYWORDS['bool'], value_type])
+          return self.tuple_struct_for_types([_KEYWORDS['bool'], value_type]).cached_type()
 
         ste_in_globals = self.globals.get(expr.func.name)
         in_globals = ste_in_globals.ref_node
@@ -983,6 +986,8 @@ class Compiler:
           break
       else:
         return t0
+    elif isinstance(expr, last.ListDecl):
+      assert False, str(expr)
     elif isinstance(expr, last.ListComprehension):
       return last.ListType(self.expr_type(funcdef, expr.body.result))
     elif isinstance(expr, last.List):
@@ -990,7 +995,7 @@ class Compiler:
       return last.ListType(self.expr_type(funcdef, expr.values[0]))
     elif isinstance(expr, last.GetAttr):
       lhs = self.expr_type(funcdef, expr.lhs)
-      assert isinstance(lhs, last.Type)
+      assert isinstance(lhs, last.Type), str(lhs)
       cur = lhs.base
       while isinstance(cur, last.PointerDecl):
         cur = cur.base
@@ -1005,7 +1010,7 @@ class Compiler:
       assert isinstance(obj, last.Type)
       return obj.base
     elif isinstance(expr, last.Tuple):
-      return self.tuple_struct_for_values(funcdef, expr.items)
+      return self.tuple_struct_for_values(funcdef, expr.items).cached_type()
     assert False, "unhandled expr_type %s" % expr
 
   def resolve_function_return_type(self, fd):
@@ -1069,7 +1074,7 @@ class Compiler:
       return 'struct ' + self.generated_structs[self.get_mangled_c_type(node.base)].struct.name
     if isinstance(node, last.Struct):
       return 'struct ' + node.name
-    if isinstance(node, last.ListType):
+    if isinstance(node, last.ListType) or isinstance(node, last.ListDecl):
       return 'struct ' + self.generated_structs[self.get_mangled_c_type(node.base)].struct.name
     if isinstance(node, last.Type):
       return self.get_c_type(node.base)
@@ -1079,12 +1084,21 @@ class Compiler:
   def get_mangled_c_type(self, node):
     x = self.get_c_type(node)
     x = x.replace('struct ', '')
-    x = x.replace('* ', 'STAR')
     return x
 
   def get_safe_c_name(self, luv_name):
     # TODO
     return luv_name
+
+  def sigils_for_indir(self, node_for_err, count):
+    if count >= 2:
+      self.error_at(node_for_err, "taking address of lvalue")
+    if count == 1:
+      return '&'
+    if count == 0:
+      return ''
+    if count < 0:
+      return '*'*(-count)
 
   def expr(self, node):
     if isinstance(node, last.Ident):
@@ -1121,11 +1135,24 @@ class Compiler:
       assert isinstance(node.op, last.Op) and node.op.name in ('&', '-', '+', '~', '*')
       return node.op.name + '(' + self.expr(node.obj) + ')'
     elif isinstance(node, last.GetAttr):
-      return self.expr(node.lhs) + '.' + node.rhs
+      lhs_type = self.expr_type(self.current_function, node.lhs)
+      indirs = 0
+      while isinstance(lhs_type, last.PointerDecl):
+        lhs_type = lhs_type.base
+        indirs -= 1
+      return '(%s(%s)).%s' % (self.sigils_for_indir(node, indirs), self.expr(node.lhs), node.rhs)
     elif isinstance(node, last.GetItem):
       ty = self.expr_type(self.current_function, node.obj)
+      indir_count = 1
+      while isinstance(ty, last.PointerDecl):
+        ty = ty.base
+        indir_count -= 1
       c_type = self.get_mangled_c_type(ty)
-      return '%s$__getitem__(&%s, %s)' % (c_type, self.expr(node.obj), self.expr(node.index))
+      return '%s$__getitem__(%s%s, %s)' % (
+          c_type,
+          self.sigils_for_indir(node, indir_count),
+          self.expr(node.obj),
+          self.expr(node.index))
     elif isinstance(node, last.FuncCall):
       if isinstance(node.func, last.Ident) and node.func.name == 'range':
         if len(node.args) == 1:
@@ -1319,7 +1346,8 @@ class Compiler:
       if isinstance(node.lhs, last.Tuple):
         assert all(isinstance(x, last.Ident) for x in node.lhs.items)
         rhs_type = self.expr_type(self.current_function, node.rhs)
-        field_types = [x.type for x in rhs_type.members]
+        assert isinstance(rhs_type, last.Type) and isinstance(rhs_type.base, last.Struct)
+        field_types = [x.type for x in rhs_type.base.members]
         struct = self.tuple_struct_for_types(field_types)
         tmp = get_tmp_var()
         result = 'struct %s %s = %s;\n' % (struct.name, tmp, self.expr(node.rhs))
@@ -1702,7 +1730,7 @@ def do_tests(parser, test_list, update):
     err = (node, msg)
 
   for t in test_list:
-    print(t)
+    #print(t)
     if '.disabled.' in t:
       disabled_list.append(t)
       continue

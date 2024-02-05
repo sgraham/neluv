@@ -1,0 +1,36 @@
+def funcy(*[]int listy):
+  return listy
+
+def funcy2(* *[]int listy):  // TODO: spaces are tokenizer/parser problem vs exponentiation
+  return listy
+
+def main():
+  L = [4,2,9,11]
+  R = funcy(&L)
+  printbool(L.len == R.len)
+  printbool(L[0] == R[0])
+  printbool(L[1] == R[1])
+  printbool(L[2] == R[2])
+  printbool(L[3] == R[3])
+
+  D = funcy2(&R)
+  printbool(L.len == D.len)
+  printint(L[0])
+  printint(L[3])
+  printint(D[0])
+  printint(D[3])
+  printbool(L[1] == D[1])
+  printbool(L[2] == D[2])
+---
+true
+true
+true
+true
+true
+true
+4
+11
+4
+11
+true
+true

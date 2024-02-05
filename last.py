@@ -132,7 +132,7 @@ class FuncType(Type):
   params: list[AstNode]
 
 @dataclass
-class SliceDecl(Type):
+class ListDecl(Type):
   pass
 
 @dataclass
