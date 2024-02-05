@@ -1,0 +1,6 @@
+import_macros "macro_enumerate.mac.py"
+
+def main():
+  L = [0]
+  for i in macro_list():
+    printint(i)

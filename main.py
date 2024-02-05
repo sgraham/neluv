@@ -6,139 +6,10 @@ import pprint
 import subprocess
 import sys
 
-#from luv_lark import Lark_StandAlone, PythonIndenter, Tree, Transformer, v_args, UnexpectedToken, logger
 from lark import Lark, Tree, Transformer, v_args, UnexpectedToken, logger, Visitor
 from lark.indenter import PythonIndenter
 
-'''
-How do to a string type?
-
-- Scan stack and heap conservatively for pointers into StrPool arena
-- Add required registration of Str objects (to include an intrusive pointer
-into them)
-- Make non-memcpy-able; incref decref, etc.
-- Make non-alias-able; semantics require a (deep) copy every time
-  - basically non-memcpy-able? some sort of storage holder for intern'd
-  strings?
-- Completely C-like, so manual init/copy/free required
-- non-memcpy-able is probably fine for direct usages of `str`, but annoying
-once there's `str`s in other structs.
-
-- want comprehensions and quick zaps on lists; maybe multiple types of str
-with different allocators?
-- something stack only that nukes at the end of the frame?
-- but [str(x) for x in L] makes a mess if you want to store the output
-
-is there some way to make that work nicely and the something manual to
-dupe-and-store?
-
-Seems like more complex types will need a type system tag that do a protocol
-for all the nasty c++ style ctor/dtor/copy/op=. Maybe it's not much
-worse than the conditions in codegen for optional or tuple?
-
-At least for the basics like Str, List, Dict, Set
-
-Every ASSIGN (including in the implementations of List, etc.) has to go through
-a macro so that the copy protocol can be followed.
-
-Would work, but it's basically C++-y and doesn't feel much like writing C any
-more. But maybe it feels like writing python?
-
-'''
-
-
 import last
-
-_TEST_CODE2 = '''
-if x > 2:
-  print(4)
-else:
-  print(5)
-
-def wee():
-  return true
-  return false
-  return null
-
-def int waa():
-  return 45
-
-struct Wee:
-  i64 a
-  i64 b
-
-union FloatOrInt:
-  i64 i
-  f64 f
-
-preproc:  // Python blocks that act on current AST
-  def increment(a, amount):
-    node = luvast.Assign(luvast.Id(a),
-                         luvast.Add(luvast.Id(a), amount))
-    inject_statement(node)
-    for x in node:
-      print(x)
-
-x = 0
-
-preproc:
-  increment(x, 4)
-
-print(x)
-
-x = #{math.pi}
-
-#["x"] = 44
-'''
-
-# Suite of `macro` would be Python
-# But that means that it can't be parsed purely by a python exec() as
-# there's no way to escape back.
-# Could parse some janky subset with an augmented python grammar that has
-# escapes
-# Or only do a procedural version where you need to construct the new AST
-# manually in Python code.
-# Maybe something that re-invokes the luv parser taking a string is fine r'''?.
-# But need to sub back in args from python too, hmm.
-# Could use inspect.currentframe().f_back.f_locals
-# Could also use fr''', but that means that it'll be python->string->luv which
-# might be tedious, depending on what you're substituting in.
-# Could start with the manual version and see how it goes? Will be verrry
-# painful (and fragile) to write macros that manually manipulate AST objects though.
-#macro printx:
-#    for item in printx.arguments:
-#        yield [|
-#            UnityEngine.Debug.Log($item)
-#        |]
-#
-
-def Macro_printx(printx):
-  for item in printx.arguments:
-    node = last.String(item)
-    yield last.parse(r'''
-  Engine.Debug.Log($node)
-''')
-
-
-
-
-# Need some way for the macro code to get access to scope knowledge to look up
-# type of variables, etc.
-_TEST_CODE = '''
-def funcy(int x):
-  print(x)
-x=1
-
-A a
-int c = 5
-A d = stuff()
-e = things()
-X.Y z
-X.Y.Z w = 0
-X.Y.Z.W q = 1
-
-funcy(x)
-'''
 
 _KEYWORDS = {
   'auto': last.Type('auto'),
@@ -516,6 +387,8 @@ class Compiler:
     #print('START ------------------')
     #pprint.pprint(self.ast_root)
 
+    self.current_function = None
+
     self.find_globals()
     #print('AFTER FIND_GLOBALS ------------------')
     #pprint.pprint(self.ast_root)
@@ -538,8 +411,6 @@ class Compiler:
 
     for contained, gsi in self.generated_structs.items():
       self.globals[gsi.struct.name] = last.SymTabEntry(gsi.node, gsi.struct)
-
-    self.current_function = None
 
   def is_lexically_before(self, a, b):
     if a.line == b.line: return a.column < b.column
@@ -587,29 +458,6 @@ class Compiler:
         if all(isinstance(x, last.Ident) for x in node.lhs.targets):
           for x in node.lhs.targets:
             self.local(x)
-
-    def visit_FuncCall(self, node):
-      if isinstance(node.func, last.Ident):
-        glob = self.parent.globals.get(node.func.name)
-        if glob and isinstance(glob.ref_node, last.MacroDef):
-          #print("CALLING MACRO", node.func.name)
-          f = glob.ref_node
-          class Macro:
-            def __init__(s):
-              s.args = node.args
-              s.block = None
-            def parse_expr(s, code):
-              tree = self.parent.parser.parse(code + '\n')
-              ast = ToAst().transform(tree)
-              return ast.body.entries[0]
-            def parse_toplevel(s, code):
-              tree = self.parent.parser.parse(code + '\n')
-              ast = ToAst().transform(tree)
-              return ast
-          macro = Macro()
-          result = f.pyfunc(macro)
-          #print('RETURING A THING')
-          return result
 
   class ScanForNonlocal:
     def __init__(self, func, parent):
@@ -901,18 +749,18 @@ class Compiler:
 
   class ResolveIdents:
     def __init__(self, parent):
-      self.cur_func = None
       self.parent = parent
+      assert self.parent.current_function is None
 
     def visit_FuncDef(self, func):
-      assert not self.cur_func
-      self.cur_func = func
+      assert not self.parent.current_function
+      self.parent.current_function = func
 
     def resolve_ident(self, ident, rhs_type, tuple_index):
       found = rhs_type
       if tuple_index is not None:
         found = found.members[tuple_index].type
-      x = self.cur_func.symtab.get(ident.name)
+      x = self.parent.current_function.symtab.get(ident.name)
       assert x, "ident not in scope? '%s'" % ident.name
       if x.type is _KEYWORDS['auto']:
         x.type = found
@@ -930,23 +778,23 @@ class Compiler:
       if isinstance(node.it, last.Ident):
         tuple_index = 0
 
-      coll_type = self.parent.expr_type(self.cur_func, node.collection)
+      coll_type = self.parent.expr_type(self.parent.current_function, node.collection)
       if coll_type is _RANGE_TYPE:
         # HACK because literals are always i32 not i64, and no auto convert
         rhs_type = _KEYWORDS['i32']
       elif isinstance(coll_type, last.ListType):
         rhs_type = coll_type.base
       else:
-        assert False, "todo"
+        assert False, "todo %s" % coll_type
       self.resolve_ident(node.it, rhs_type, tuple_index=None)
 
     def visit_Assign(self, assign):
       if isinstance(assign.lhs, last.Ident):
-        rhs_type = self.parent.expr_type(self.cur_func, assign.rhs)
+        rhs_type = self.parent.expr_type(self.parent.current_function, assign.rhs)
         self.resolve_ident(assign.lhs, rhs_type, tuple_index=None)
       elif isinstance(assign.lhs, last.TupleAssign):
         assert all(isinstance(x, last.Ident) for x in assign.lhs.targets)
-        rhs_type = self.parent.expr_type(self.cur_func, assign.rhs)
+        rhs_type = self.parent.expr_type(self.parent.current_function, assign.rhs)
         for i,x in enumerate(assign.lhs.targets):
           self.resolve_ident(x, rhs_type, tuple_index=i)
 
@@ -961,7 +809,7 @@ class Compiler:
         self.parent.generated_structs[c_base_type_name] = GeneratedStructInfo(od, struct)
 
     def visit_TupleCreate(self, tc):
-      field_types = [self.parent.expr_type(self.cur_func, v) for v in tc.values]
+      field_types = [self.parent.expr_type(self.parent.current_function, v) for v in tc.values]
       self.parent.create_tuple_struct(field_types, tc)
 
     def make_list_struct(self, elem_type, node):
@@ -978,28 +826,27 @@ class Compiler:
       self.parent.HACK_generate_list_int32_methods = True
 
     def visit_ListComprehension(self, lc):
-      elem_type = self.parent.expr_type(self.cur_func, lc.body.result)
+      elem_type = self.parent.expr_type(self.parent.current_function, lc.body.result)
       self.make_list_struct(elem_type, lc)
 
     def visit_List(self, l):
       if len(l.values) == 0:
         self.parent.error_at(l, "can't determine type of empty list yet")
-      t = self.parent.expr_type(self.cur_func, l.values[0])
+      t = self.parent.expr_type(self.parent.current_function, l.values[0])
       for i in l.values[1:]:
-        t2 = self.parent.expr_type(self.cur_func, i)
+        t2 = self.parent.expr_type(self.parent.current_function, i)
         if t is not t2:
           self.error_at(l, 'inconsistent types in list, was "%s" now "%s"' % (t, t2))
       self.make_list_struct(t, l)
 
-    #def visit_Ident(self, ident):
-      #x = self.cur_func.symtab.get(ident.name)
-      #assert x, "ident not in scope? '%s'" % ident.name
-      #print('VISIT_IDENT', x)
-      #x.type = self.parent.expr_type(self.cur_func, x.ref_node)
-      #print('GENERAL IDENT REF', ident.name, 'NOW', x.type)
+    def visit_FuncCall(self, funccall):
+      if isinstance(funccall.func, last.Ident):
+        glob = self.parent.globals.get(funccall.func.name)
+        if glob and isinstance(glob.ref_node, last.MacroDef):
+          return self.parent.expand_macro(funccall, glob.ref_node)
 
     def after_FuncDef(self, func):
-      assert self.cur_func == func
+      assert self.parent.current_function == func
       for nested_name, uvb in func.upval_bindings.items():
         # Resolving references to upvals that were previously untyped
         # (|x| in test/run/nested_func_ref_up.luv)
@@ -1014,7 +861,7 @@ class Compiler:
               if mem.name == ident:
                 mem.type = ste.type
 
-      self.cur_func = None
+      self.parent.current_function = None
 
     def visit_Struct(self, struct):
       pass
@@ -1022,6 +869,29 @@ class Compiler:
   def resolve_idents(self):
     resolver = self.ResolveIdents(self)
     self.Visit(resolver, self.ast_root)
+
+  def expand_macro(self, node, mac):
+    assert (isinstance(node, last.FuncCall) and isinstance(node.func, last.Ident)
+            and isinstance(mac, last.MacroDef))
+    #print("CALLING MACRO", node.func.name)
+    class Macro:
+      def __init__(s):
+        s.args = node.args
+        s.block = None
+        s.func = self.current_function
+        s._KEYWORDS = _KEYWORDS
+      def parse_expr(s, code):
+        tree = self.parser.parse(code + '\n')
+        ast = ToAst().transform(tree)
+        return ast.body.entries[0]
+      def parse_toplevel(s, code):
+        tree = self.parser.parse(code + '\n')
+        ast = ToAst().transform(tree)
+        return ast
+    macro = Macro()
+    result = mac.pyfunc(macro)
+    #print('RETURING A THING')
+    return result
 
   def find_return_stmts(self, func):
     class FindReturns:
@@ -1089,6 +959,9 @@ class Compiler:
           return in_globals.rtype
         elif isinstance(in_globals, last.Struct):
           return in_globals.cached_type()
+        elif isinstance(in_globals, last.MacroDef):
+          macro_expansion = self.expand_macro(expr, in_globals)
+          return self.expr_type(funcdef, macro_expansion)
     elif isinstance(expr, last.UnaryExpr):
       rhs_type = self.expr_type(funcdef, expr.obj)
       if expr.op.name == '*':
@@ -1709,6 +1582,14 @@ static void printstr(struct $Str s) {
 #define $RangeIterReturn struct $Tuple$_Bool$int32_t
 #define $RangeIterValue int32_t
 
+struct $List$int32_tIter {
+  struct $List$int32_t* seq;
+  int32_t cur;
+};
+
+#define $List$int32_tIterReturn struct $Tuple$_Bool$int32_t
+#define $List$int32_tIterValue int32_t
+
 struct $RangeIter $Range$__iter__(struct $Range* self) {
   return (struct $RangeIter){self, self->start};
 }
@@ -1728,6 +1609,19 @@ struct $Tuple$_Bool$int32_t $RangeIter$__next__(struct $RangeIter* iter) {
 int32_t $List$int32_t$__getitem__(struct $List$int32_t* L, int64_t at) {
   assert(at >= 0 && at < L->len);
   return L->ptr[at];
+}
+
+struct $List$int32_tIter $List$int32_t$__iter__(struct $List$int32_t* self) {
+  return (struct $List$int32_tIter){self, 0};
+}
+
+struct $Tuple$_Bool$int32_t $List$int32_tIter$__next__(struct $List$int32_tIter* iter) {
+  if (iter->cur >= iter->seq->len) {
+    return (struct $Tuple$_Bool$int32_t){0};
+  }
+  int32_t ret = iter->seq->ptr[iter->cur];
+  iter->cur++;
+  return (struct $Tuple$_Bool$int32_t){1, ret};
 }
 
 void $List$int32_t$__del__(struct $List$int32_t* L) {
@@ -1796,7 +1690,7 @@ def dyibicc(c_file):
     print(proc.stdout, file=sys.stderr)
     print('---STDERR', file=sys.stderr)
     print(proc.stderr, file=sys.stderr)
-    raise RuntimeError('compile failed')
+    raise RuntimeError('dyibicc failed')
   return proc.stdout.rstrip('\n')
 
 def do_tests(parser, test_list, update):
