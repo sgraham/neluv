@@ -1,0 +1,35 @@
+def fib(int n):
+  if n < 2:
+    return n
+  return fib(n - 1) + fib(n - 2)
+
+struct MyFibCollection:
+  int unused  // TODO: support pass here maybe
+
+on MyFibCollection:
+  def __iter__(*MyFibCollection self):
+    return CustomIter(0)
+
+struct CustomIter:
+  int cur
+
+on CustomIter:
+  def __next__(*CustomIter self):
+    ret = fib(self.cur)
+    self.cur = self.cur + 1
+    return true, ret
+
+def main():
+  fibs = MyFibCollection(-1)
+  for i in fibs:
+    printint(i)
+    if i >= 8:
+      break
+---
+0
+1
+1
+2
+3
+5
+8

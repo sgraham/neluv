@@ -39,8 +39,6 @@ _KEYWORDS['double'] = _KEYWORDS['f64']
 _KEYWORDS['float'] = _KEYWORDS['f32']
 _KEYWORDS['int'] = _KEYWORDS['i32']
 
-_RANGE_TYPE = last.RangeType(None)
-
 visit_tag_counter = 0
 tmp_var_counter = 0
 OP_MAP = {
@@ -194,6 +192,12 @@ class ToAst(Transformer):
 
   def on_block(self, children):
     return last.On(children[0], children[1])
+
+  def continue_stmt(self, children):
+    return last.Continue()
+
+  def break_stmt(self, children):
+    return last.Break()
 
   def return_stmt(self, children):
     return last.Return(children[0])
@@ -380,7 +384,6 @@ class Compiler:
     self.generated_structs = {}
 
     self.create_tuple_struct([_KEYWORDS['bool'], _KEYWORDS['i32']], None)  # For range().
-    self.create_range_structs()
 
     self.HACK_generate_list_int32_methods = False  # TODO XXX
 
@@ -749,18 +752,6 @@ class Compiler:
     struct.omit_constructor = True
     self.generated_structs[name] = GeneratedStructInfo(node, struct)
 
-  def create_range_structs(self):
-    # TODO: i32 vs i64
-    range_struct = self.create_struct('$Range', [
-        last.TypedVar(_KEYWORDS['i32'], 'start'),
-        last.TypedVar(_KEYWORDS['i32'], 'stop'),
-        last.TypedVar(_KEYWORDS['i32'], 'step')
-      ])
-
-    self.create_struct('$RangeIter', [
-      last.TypedVar(last.PointerDecl(range_struct), 'range'),
-      last.TypedVar(_KEYWORDS['i32'], 'cur')])
-
   def create_struct(self, name, members, node=None, omit_constructor=True):
     struct = last.Struct(name, members)
     struct.omit_constructor = True
@@ -802,11 +793,10 @@ class Compiler:
         tuple_index = 0
 
       coll_type = self.parent.expr_type(self.parent.current_function, node.collection)
-      if coll_type is _RANGE_TYPE:
-        # HACK because literals are always i32 not i64, and no auto convert
-        rhs_type = _KEYWORDS['i32']
-      elif isinstance(coll_type, last.ListType):
+      if isinstance(coll_type, last.ListType):
         rhs_type = coll_type.base
+      elif it_type := self.parent.result_type_of_method(coll_type, '__iter__', errnode=node):
+        rhs_type = it_type
       else:
         assert False, "todo %s" % coll_type
       self.resolve_ident(node.it, rhs_type, tuple_index=None)
@@ -934,6 +924,19 @@ class Compiler:
     field_types = [self.expr_type(func, v) for v in values]
     return self.tuple_struct_for_types(field_types)
 
+  def result_type_of_method(self, iter_type, special_name, errnode):
+    assert isinstance(iter_type, last.Type) and isinstance(iter_type.base, last.Struct)
+    assert special_name.startswith('__') and special_name.endswith('__')
+    next_func_name = '%s$%s' % (iter_type.base.name, special_name)
+    ste_in_globals = self.globals.get(next_func_name)
+    if ste_in_globals:
+      in_globals = ste_in_globals.ref_node
+      if not self.resolve_function_return_type(in_globals):
+        return None  # TODO: test for this case, can it get hit?
+      return in_globals.rtype
+    else:
+      self.error_at(errnode, 'no __next__ found for "%s"' % iter_type.base.name)
+
   def expr_type(self, funcdef, expr):
     if expr is None:
       return _KEYWORDS['void']
@@ -952,9 +955,6 @@ class Compiler:
       return _KEYWORDS['str']
     elif isinstance(expr, last.FuncCall):
       if isinstance(expr.func, last.Ident):
-        if expr.func.name == 'range':
-          return _RANGE_TYPE
-
         if expr.func.name == 'iter':
           assert len(expr.args) == 1
           arg_type = self.expr_type(funcdef, expr.args[0])
@@ -972,15 +972,7 @@ class Compiler:
             return self.tuple_struct_for_types([_KEYWORDS['bool'], value_type]).cached_type()
           elif isinstance(arg_type, last.Type) and isinstance(arg_type.base, last.Struct):
             # Find __next__() func for type and determine its return type
-            next_func_name = '%s$__next__' % arg_type.base.name
-            ste_in_globals = self.globals.get(next_func_name)
-            if ste_in_globals:
-              in_globals = ste_in_globals.ref_node
-              if not self.resolve_function_return_type(in_globals):
-                return None  # TODO: test for this case, can it get hit?
-              return in_globals.rtype
-            else:
-              self.error_at(expr, 'no __next__ found for "%s"' % arg_type.base.name)
+            return self.result_type_of_method(arg_type, '__next__', expr)
           else:
             assert False, "todo"
 
@@ -1105,10 +1097,6 @@ class Compiler:
       return 'float'
     if node == _KEYWORDS['str']:
       return 'struct $Str'
-    if isinstance(node, last.RangeType):
-      return 'struct $Range'
-    if isinstance(node, last.IterType):
-      return '%sIter' % self.get_c_type(node.base)
     if isinstance(node, last.PointerDecl):
       return self.get_c_type(node.base) + '*'
     if isinstance(node, last.OptionalDecl):
@@ -1195,18 +1183,6 @@ class Compiler:
           self.expr(node.obj),
           self.expr(node.index))
     elif isinstance(node, last.FuncCall):
-      if isinstance(node.func, last.Ident) and node.func.name == 'range':
-        if len(node.args) == 1:
-          return '(struct $Range){0,%s,1}' % self.expr(node.args[0])
-        elif len(node.args) == 2:
-          return '(struct $Range){%s,%s,1}' % (
-              self.expr(node.args[0]), self.expr(node.args[1]))
-        elif len(node.args) == 3:
-          return '(struct $Range){%s,%s,%s}' % (
-              self.expr(node.args[0]), self.expr(node.args[1]), self.expr(node.args[2]))
-        else:
-          self.error_at(node.func, 'incorrect number of arguments to "range"')
-
       if isinstance(node.func, last.Ident) and node.func.name == 'iter':
         if len(node.args) == 1:
           arg_type = self.expr_type(self.current_function, node.args[0])
@@ -1253,10 +1229,10 @@ class Compiler:
         # TODO: not sure about make a local copy of the thing (i.e. `range(5)`)
         result += '%s %s = %s;' % (thing_c_type, thing_tmp, self.expr(f.thing))
         thing_mangled_c_type = self.get_mangled_c_type(thing_type)
-        # TODO: probably expr_type and then c_type of that.
-        iter_type = '%sIter' % thing_mangled_c_type
+        iter_type = self.result_type_of_method(thing_type, '__iter__', node)
+        iter_mangled_c_type = self.get_mangled_c_type(iter_type)
         result += 'struct %s %s = %s$__iter__(&%s);' % (
-            iter_type, iter_tmp, thing_mangled_c_type, thing_tmp)
+            iter_mangled_c_type, iter_tmp, thing_mangled_c_type, thing_tmp)
 
         assert isinstance(f.its, last.Ident), "todo"
         it_name = f.its.name
@@ -1356,15 +1332,25 @@ class Compiler:
       iter_tmp = get_tmp_var()
       it_ret_tmp = get_tmp_var()
       result = '%s %s = %s;' % (coll_c_type, coll_tmp, self.expr(node.collection))
-      result += '%sIter %s = %s$__iter__(&%s);' % (
-          coll_c_type, iter_tmp, coll_mangled_c_type, coll_tmp)
+      iter_type = self.result_type_of_method(coll_type, '__iter__', node)
+      iter_c_type = self.get_c_type(iter_type)
+      iter_mangled_c_type = self.get_mangled_c_type(iter_type)
+      result += '%s %s = %s$__iter__(&%s);' % (
+          iter_c_type, iter_tmp, coll_mangled_c_type, coll_tmp)
       assert isinstance(node.it, last.Ident), "todo"
       it_name = node.it.name
-      result += '%sIterReturn %s = {0};' % (coll_mangled_c_type, it_ret_tmp)
+      iter_return_type = self.result_type_of_method(iter_type, '__next__', node)
+      iter_return_c_type = self.get_c_type(iter_return_type)
+      assert (isinstance(iter_return_type, last.Type) and
+              isinstance(iter_return_type.base, last.Struct))
+      assert iter_return_type.base.members[1].name == '_1'
+      iter_value_type = iter_return_type.base.members[1].type
+      iter_value_c_type = self.get_c_type(iter_value_type)
+      result += '%s %s = {0};' % (iter_return_c_type, it_ret_tmp)
       result += 'for(;;) {'
-      result += '%s = %sIter$__next__(&%s);' % (it_ret_tmp, coll_mangled_c_type, iter_tmp)
+      result += '%s = %s$__next__(&%s);' % (it_ret_tmp, iter_mangled_c_type, iter_tmp)
       result += 'if (!(%s._0)) break;' % it_ret_tmp
-      result += '%sIterValue %s = %s._1;' % (coll_mangled_c_type, it_name, it_ret_tmp)
+      result += '%s %s = %s._1;' % (iter_value_c_type, it_name, it_ret_tmp)
       result += self.stmt(node.body)
       result += '}'
       return result
@@ -1374,6 +1360,8 @@ class Compiler:
         result += ' ' + self.expr(node.value)
       result += ';'
       return result
+    elif isinstance(node, last.Break):
+      return 'break;'
     elif isinstance(node, last.Pass):
       return ';'
     elif isinstance(node, last.Del):
@@ -1643,10 +1631,6 @@ static void printstr(struct $Str s) {
 
       header('late implementations')
       f.write(r'''
-// TODO: generate all this
-#define $RangeIterReturn struct $Tuple$_Bool$int32_t
-#define $RangeIterValue int32_t
-
 struct $List$int32_tIter {
   struct $List$int32_t* seq;
   int32_t cur;
@@ -1655,18 +1639,6 @@ struct $List$int32_tIter {
 #define $List$int32_tIterReturn struct $Tuple$_Bool$int32_t
 #define $List$int32_tIterValue int32_t
 
-struct $RangeIter $Range$__iter__(struct $Range* self) {
-  return (struct $RangeIter){self, self->start};
-}
-
-struct $Tuple$_Bool$int32_t $RangeIter$__next__(struct $RangeIter* iter) {
-  if (iter->cur >= iter->range->stop) {
-    return (struct $Tuple$_Bool$int32_t){0};
-  }
-  int32_t ret = iter->cur;
-  iter->cur += iter->range->step;
-  return (struct $Tuple$_Bool$int32_t){1, ret};
-}
 ''')
 
       if self.HACK_generate_list_int32_methods:
@@ -1771,7 +1743,7 @@ def do_tests(parser, test_list, update):
     err = (node, msg)
 
   for t in test_list:
-    #print(t)
+    print(t)
     if '.disabled.' in t:
       disabled_list.append(t)
       continue

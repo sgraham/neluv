@@ -1,0 +1,23 @@
+struct Range:
+  int start
+  int stop
+  int step
+
+struct RangeIter:
+  *Range obj
+  int cur
+
+on Range:
+  def __iter__(*Range self):
+    return RangeIter(self, self.start)
+
+on RangeIter:
+  def __next__(*RangeIter self):
+    if self.cur >= self.obj.stop:
+      return false, 0
+    ret = self.cur
+    self.cur = self.cur + self.obj.step
+    return true, ret
+
+def range(n):  // TODO: magic 3 param version
+  return Range(0, n, 1)

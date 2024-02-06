@@ -161,6 +161,14 @@ class Del(AstNode):
   exprs: list[AstNode]
 
 @dataclass
+class Break(AstNode):
+  pass
+
+@dataclass
+class Continue(AstNode):
+  pass
+
+@dataclass
 class Pass(AstNode):
   pass
 
