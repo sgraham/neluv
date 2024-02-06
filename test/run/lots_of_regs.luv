@@ -17,6 +17,6 @@ def int stuff():
   return a+b+c+d+e+f+g+h+i+j+k+l+m+n+o
 
 def main():
-  printint(stuff())
+  print(stuff())
 ---
 120

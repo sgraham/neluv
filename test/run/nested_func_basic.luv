@@ -1,6 +1,6 @@
 def main():
   def stuff():
     return 11
-  printint(stuff())
+  print(stuff())
 ---
 11

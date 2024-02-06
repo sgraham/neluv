@@ -5,10 +5,11 @@ def main():
     def things():
       return y
     return x + things()
-  printint(x)
-  printint(y)
+  print(x)
+  print(y)
   x = 12
-  printint(stuff())
+  printint(stuff())  // TODO: expr_type fails during macro
+  printnl()
 ---
 7
 8

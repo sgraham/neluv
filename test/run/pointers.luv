@@ -3,9 +3,9 @@ def main():
   y = 22
   *int p = &x
   *int q = &y
-  printint(*p)
-  printint(*p + 5)
-  printint(*p + *q)
+  print(*p)
+  print(*p + 5)
+  print(*p + *q)
 ---
 11
 16

@@ -1,4 +1,4 @@
 def main():
-  printint(10 - 4)
+  print(10 - 4)
 ---
 6

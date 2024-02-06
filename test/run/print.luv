@@ -1,0 +1,10 @@
+def main():
+  print(100)
+  print()
+  print(1, 2, 3)
+  print(false, "hi")
+---
+100
+
+1 2 3
+false hi

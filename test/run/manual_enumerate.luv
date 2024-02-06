@@ -14,24 +14,24 @@ def main():
   enumer = MyEnum(&L, 0)
 
   wee = walk_next(&enumer)
-  printbool(wee._0)
-  printint(wee._1._0)
-  printint(wee._1._1)
+  print(wee._0)
+  print(wee._1._0)
+  print(wee._1._1)
 
   wee = walk_next(&enumer)
-  printbool(wee._0)
-  printint(wee._1._0)
-  printint(wee._1._1)
+  print(wee._0)
+  print(wee._1._0)
+  print(wee._1._1)
 
   wee = walk_next(&enumer)
-  printbool(wee._0)
-  printint(wee._1._0)
-  printint(wee._1._1)
+  print(wee._0)
+  print(wee._1._0)
+  print(wee._1._1)
 
   wee = walk_next(&enumer)
-  printbool(wee._0)
-  printint(wee._1._0)
-  printint(wee._1._1)
+  print(wee._0)
+  print(wee._1._0)
+  print(wee._1._1)
 ---
 true
 0

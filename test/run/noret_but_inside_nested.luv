@@ -4,6 +4,6 @@ def stuff():
 
 def main():
   stuff()
-  printint(44)
+  print(44)
 ---
 44

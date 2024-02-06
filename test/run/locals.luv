@@ -4,6 +4,6 @@ def int stuff(int c):
   return a
 
 def main():
-  printint(stuff(3))
+  print(stuff(3))
 ---
 87

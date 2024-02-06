@@ -9,9 +9,9 @@ struct B:
 
 def main():
   a = A(false, B(123), true)
-  printbool(a.x)
-  printint(a.y.boo)
-  printbool(a.z)
+  print(a.x)
+  print(a.y.boo)
+  print(a.z)
 ---
 false
 123

@@ -1,4 +1,4 @@
 def main():
-  printint(37)  // temp hack until print macro is possible
+  print(37)
 ---
 37

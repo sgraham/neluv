@@ -6,6 +6,6 @@ def main():
   a = 123
   x = X(&a, null)
   x.ptr2 = x.ptr
-  printint(*x.ptr + *x.ptr2)
+  print(*x.ptr + *x.ptr2)
 ---
 246

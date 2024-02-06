@@ -541,8 +541,10 @@ class Compiler:
   def load_macros(self, fn):
     glob = {}
     loc = {}
-    rel_fn = os.path.join(os.path.split(self.filename)[0], fn)
-    with open(rel_fn, 'r') as f:
+    fn_to_open = fn
+    if not os.path.isfile(fn_to_open):
+      fn_to_open = os.path.join(os.path.split(self.filename)[0], fn)
+    with open(fn_to_open, 'r') as f:
       exec(f.read(), glob, loc)
     for name,func in loc.items():
       if inspect.isfunction(func):
@@ -908,7 +910,8 @@ class Compiler:
         s.args = node.args
         s.block = None
         s.func = self.current_function
-        s._KEYWORDS = _KEYWORDS
+        s.expr_type = lambda x: self.expr_type(self.current_function, x)
+        s.keywords = _KEYWORDS
       def parse_expr(s, code):
         tree = self.parser.parse(code + '\n', include_prelude=False)
         ast = ToAst().transform(tree)
@@ -1000,6 +1003,11 @@ class Compiler:
         elif isinstance(in_globals, last.MacroDef):
           macro_expansion = self.expand_macro(expr, in_globals)
           return self.expr_type(funcdef, macro_expansion)
+    elif isinstance(expr, last.CompExpr):
+      assert len(expr.chain) == 3, "todo"
+      if expr.chain[1].name in ('==', '!=', '<=', '<', '>', '>='):
+        return _KEYWORDS['bool']
+      assert False, "todo"
     elif isinstance(expr, last.UnaryExpr):
       rhs_type = self.expr_type(funcdef, expr.obj)
       if expr.op.name == '*':
@@ -1592,13 +1600,19 @@ void $Str$__del__(struct $Str* self) {
 #define int32_t$__idiv__(a, b) ((*a)/=(b))
 
 static void printint(int x) {
-  printf("%d\n", x);
+  printf("%d", x);
 }
 static void printbool(_Bool x) {
-  printf(x ? "true\n" : "false\n");
+  printf(x ? "true" : "false");
 }
 static void printstr(struct $Str s) {
-  printf("%s\n", s.ptr);
+  printf("%s", s.ptr);
+}
+static void printspace(void) {
+  printf(" ");
+}
+static void printnl(void) {
+  printf("\n");
 }
 ''')
 

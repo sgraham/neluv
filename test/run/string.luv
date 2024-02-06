@@ -2,12 +2,12 @@ def f():
   return "buddy"
 
 def main():
-  printstr("hello")
+  print("hello")
   y = "i'm " + f()
-  printstr(y)
+  print(y)
   x = "blah"
-  printstr(x)
-  printstr(x)
+  print(x)
+  print(x)
   del y
 ---
 hello

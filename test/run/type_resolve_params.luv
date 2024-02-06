@@ -4,6 +4,6 @@ def f(int p):
   return f(p - 1)
 
 def main():
-  printint(f(3))
+  print(f(3))
 ---
 999

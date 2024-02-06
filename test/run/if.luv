@@ -6,6 +6,6 @@ def int stuff(int x):
   return 11
 
 def main():
-  printint(stuff(5))
+  print(stuff(5))
 ---
 44

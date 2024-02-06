@@ -2,9 +2,10 @@ def main():
   x = 7
   def stuff():
     return x
-  printint(x)
+  print(x)
   x = 12
-  printint(stuff())
+  printint(stuff())  // TODO: expr_type fails fails during expansion
+  printnl()
 ---
 7
 12

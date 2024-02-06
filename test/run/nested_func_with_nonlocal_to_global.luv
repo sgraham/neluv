@@ -7,9 +7,12 @@ def main():
     nonlocal x
     x = 4
     return x
-  printint(x)
+  printint(x)  // TODO: expr_type
+  printnl()
   printint(stuff())
+  printnl()
   printint(x)
+  printnl()
 ---
 12
 4

@@ -8,7 +8,7 @@ def stuff():
   return 123
 
 def main():
-  printint(x)
+  print(x)
 
 x = stuff()
 ---

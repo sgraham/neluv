@@ -9,22 +9,22 @@ def triple():
 
 def main():
   s = single()
-  printint(s._0)
-  printint(s._1)
+  print(s._0)
+  print(s._1)
 
   n = nested()
-  printbool(n._0)
-  printint(n._1._0)
-  printint(n._1._1)
+  print(n._0)
+  print(n._1._0)
+  print(n._1._1)
 
   t = triple()
-  printbool(t._0)
-  printint(t._1._0)
-  printint(t._1._1)
-  printstr(t._2._0)
-  printbool(t._2._1)
-  printint(t._2._2._0)
-  printint(t._2._2._1)
+  print(t._0)
+  print(t._1._0)
+  print(t._1._1)
+  print(t._2._0)
+  print(t._2._1)
+  print(t._2._2._0)
+  print(t._2._2._1)
 ---
 1
 2

@@ -4,6 +4,6 @@ def int stuff(int a, int b):
   return 456
 
 def main():
-  printint(stuff(13, 13))
+  print(stuff(13, 13))
 ---
 123

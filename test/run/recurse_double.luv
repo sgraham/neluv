@@ -4,6 +4,6 @@ def int fib(int n):
   return fib(n - 1) + fib(n - 2)
 
 def main():
-  printint(fib(8))
+  print(fib(8))
 ---
 21

@@ -2,7 +2,7 @@ struct A:
   int x
 
 def f(*A pa):
-  printint(pa.x + 1)
+  print(pa.x + 1)
 
 def main():
   a = A(11)

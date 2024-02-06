@@ -2,6 +2,6 @@ def stuff():
   return 33
 
 def main():
-  printint(stuff())
+  print(stuff())
 ---
 33

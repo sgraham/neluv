@@ -1,3 +1,6 @@
+import last
+
+'''
 struct List$T:
     *T ptr
     int len
@@ -42,3 +45,22 @@ on List$T_Iter:
         ret = self.seq.ptr[self.cur]
         self.cur += 1
         return true, ret
+'''
+
+# Don't forget to use __builtins__['print'], etc. when debugging this function.
+def print(macro):
+    result = []
+    for i,a in enumerate(macro.args):
+        ty = macro.expr_type(a)
+        if ty is macro.keywords['i32']:
+            result.append(last.FuncCall(last.Ident('printint'), [a]))
+        elif ty is macro.keywords['bool']:
+            result.append(last.FuncCall(last.Ident('printbool'), [a]))
+        elif ty is macro.keywords['str']:
+            result.append(last.FuncCall(last.Ident('printstr'), [a]))
+        else:
+            assert False, 'todo %s' % ty
+        if i < len(macro.args) - 1:
+            result.append(last.FuncCall(last.Ident('printspace'), []))
+    result.append(last.FuncCall(last.Ident('printnl'), []))
+    return last.Block(result)

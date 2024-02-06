@@ -1,4 +1,4 @@
 def main():
-  printint(84 / 4)
+  print(84 / 4)
 ---
 21

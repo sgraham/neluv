@@ -4,6 +4,6 @@ def fib(int n):
   return fib(n-1) + fib(n-2)
 
 def main():
-  printint(fib(6))
+  print(fib(6))
 ---
 8

@@ -6,10 +6,10 @@ struct Thing:
 
 def main():
   t = Thing(12, false, 1.0, 0xffff)
-  printbool(t.x == 12)
-  printbool(t.y)
-  printbool(t.z == 1.0)
-  printbool(t.w == 65535)
+  print(t.x == 12)
+  print(t.y)
+  print(t.z == 1.0)
+  print(t.w == 65535)
 ---
 true
 false

@@ -2,6 +2,6 @@ def int func(int a):
   return a * 2
 
 def main():
-  printint(func(14))
+  print(func(14))
 ---
 28

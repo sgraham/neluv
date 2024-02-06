@@ -1,6 +1,6 @@
 def main():
   int a = 84
   a = a + 7
-  printint(a)
+  print(a)
 ---
 91

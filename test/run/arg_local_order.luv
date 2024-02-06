@@ -7,6 +7,6 @@ def int wee(int a, int b, int c, int d):
   return v + x + b + d
 
 def main():
-  printint(wee(6, 7, 8, 9))
+  print(wee(6, 7, 8, 9))
 ---
 22

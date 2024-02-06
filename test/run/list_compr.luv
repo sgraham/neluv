@@ -5,8 +5,8 @@ def fib(int n):
 
 def main():
   L = [fib(i) for i in range(7)]
-  printint(L[0])
-  printint(L[6])
+  print(L[0])
+  print(L[6])
 ---
 0
 8

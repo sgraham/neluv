@@ -6,10 +6,11 @@ def main():
     def things():
       return y + z
     return x + things()
-  printint(x)
-  printint(y)
+  print(x)
+  print(y)
   x = 12
-  printint(stuff())
+  printint(stuff())  // TODO: expr_type
+  printnl()
 ---
 7
 8

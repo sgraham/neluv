@@ -3,4 +3,4 @@ import_macros "macro_enumerate.mac.py"
 def main():
   L = [5,4,3,3,1]
   for i,j in enumerate(L):
-    printint(i)
+    print(i)

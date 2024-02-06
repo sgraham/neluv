@@ -3,6 +3,6 @@ def stuff():
 
 def main():
   stuff()
-  printint(22)
+  print(22)
 ---
 22

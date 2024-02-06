@@ -4,6 +4,6 @@ def int stuff(int x):
   return stuff(x - 1)
 
 def main():
-  printint(stuff(5))
+  print(stuff(5))
 ---
 99

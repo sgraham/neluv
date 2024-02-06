@@ -29,7 +29,6 @@ syn keyword     luvKeyword       null
 syn keyword     luvKeyword       on
 syn keyword     luvKeyword       or
 syn keyword     luvKeyword       pass
-syn keyword     luvKeyword       print
 syn keyword     luvKeyword       return
 syn keyword     luvKeyword       scoped
 syn keyword     luvKeyword       struct
@@ -46,7 +45,7 @@ syn keyword     luvType str
 syn keyword     luvType void
 hi def link     luvType Type
 
-syn keyword     luvBuiltin range iter next stack heap enumerate
+syn keyword     luvBuiltin range iter next stack heap enumerate print
 hi def link     luvBuiltin Function
 
 syn keyword     luvMacroHelper parse insert_global have_global args block

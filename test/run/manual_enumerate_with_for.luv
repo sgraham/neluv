@@ -22,7 +22,7 @@ on CustomIter:
 def main():
   fibs = MyFibCollection(-1)
   for i in fibs:
-    printint(i)
+    print(i)
     if i >= 8:
       break
 ---

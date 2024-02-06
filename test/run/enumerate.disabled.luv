@@ -1,8 +1,8 @@
 def main():
   L = [5,4,3,2,1]
   for i,j in enumerate(L):
-    printint(i)
-    printint(j)
+    print(i)
+    print(j)
 ---
 0
 5

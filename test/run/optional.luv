@@ -1,8 +1,10 @@
 def printit(?int opt):
   if opt as n:
-    printint(n)
+    printint(n)  // TODO: expr_type
+    printnl()
   else:
-    printint(-1)
+    printint(-1)  // TODO: expr_type
+    printnl()
 
 def main():
   ?int x = 5

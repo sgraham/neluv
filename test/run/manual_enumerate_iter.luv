@@ -16,25 +16,25 @@ def main():
   fibs = MyFibCollectionIter(0)
 
   x = next(fibs)
-  printint(x._1)
+  print(x._1)
 
   x = next(fibs)
-  printint(x._1)
+  print(x._1)
 
   x = next(fibs)
-  printint(x._1)
+  print(x._1)
 
   x = next(fibs)
-  printint(x._1)
+  print(x._1)
 
   x = next(fibs)
-  printint(x._1)
+  print(x._1)
 
   x = next(fibs)
-  printint(x._1)
+  print(x._1)
 
   x = next(fibs)
-  printint(x._1)
+  print(x._1)
 ---
 0
 1

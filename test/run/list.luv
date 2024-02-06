@@ -1,7 +1,7 @@
 def main():
   L = [5,4,3,2,1,0]
-  printint(L[0])
-  printint(L[5])
+  print(L[0])
+  print(L[5])
   del L
 ---
 5

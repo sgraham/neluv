@@ -4,11 +4,11 @@ def funcy([]int listy):
 def main():
   L = [4,2,9,11]
   M = funcy(L)
-  printbool(L.len == M.len)
-  printbool(L[0] == M[0])
-  printbool(L[1] == M[1])
-  printbool(L[2] == M[2])
-  printbool(L[3] == M[3])
+  print(L.len == M.len)
+  print(L[0] == M[0])
+  print(L[1] == M[1])
+  print(L[2] == M[2])
+  print(L[3] == M[3])
 ---
 true
 true

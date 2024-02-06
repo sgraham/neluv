@@ -3,6 +3,6 @@ struct Stuff:
 
 def main():
   s = Stuff(14)
-  printint(s.x)
+  print(s.x)
 ---
 14

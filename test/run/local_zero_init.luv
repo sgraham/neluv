@@ -3,6 +3,6 @@ def int stuff(int a):
   return x
 
 def main():
-  printint(stuff(3))
+  print(stuff(3))
 ---
 0

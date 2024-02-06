@@ -19,7 +19,7 @@ on RangeIter:
     self.cur += self.obj.step
     return true, ret
 
-//import_macros "prelude.mac.py"
+import_macros "prelude.mac.py"
 
 def range(int n):  // TODO: magic 3 arg range() via a macro
   return Range(0, n, 1)

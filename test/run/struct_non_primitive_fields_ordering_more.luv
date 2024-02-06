@@ -18,6 +18,6 @@ def main():
   c = C(2, d)
   b = B(3, c)
   a = A(4, b)
-  printint(a.b.c.d.x)
+  print(a.b.c.d.x)
 ---
 1
