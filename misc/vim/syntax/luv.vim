@@ -26,6 +26,7 @@ syn keyword     luvKeyword       macro
 syn keyword     luvKeyword       not
 syn keyword     luvKeyword       nonlocal
 syn keyword     luvKeyword       null
+syn keyword     luvKeyword       on
 syn keyword     luvKeyword       or
 syn keyword     luvKeyword       pass
 syn keyword     luvKeyword       print

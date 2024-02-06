@@ -192,6 +192,9 @@ class ToAst(Transformer):
   def macro_with_block_stmt(self, children):
     return last.MacroCallWithBlock(children[0], children[1])
 
+  def on_block(self, children):
+    return last.On(children[0], children[1])
+
   def return_stmt(self, children):
     return last.Return(children[0])
 
@@ -562,6 +565,12 @@ class Compiler:
         pass
       elif isinstance(tl, last.ImportMacros):
         self.load_macros(tl.filename.value)
+      elif isinstance(tl, last.On):
+        for f in tl.block.entries:
+          if not isinstance(f, last.FuncDef):
+            self.error_at(f, 'expecting only function definitions in "on" block')
+          f.name = '%s$%s' % (tl.name, f.name)
+          self.insert_global_or_error(f)
       else:
         self.error_at(tl, 'unexpected at top level %s' % tl)
 
@@ -954,12 +963,26 @@ class Compiler:
         if expr.func.name == 'next':
           assert len(expr.args) == 1
           arg_type = self.expr_type(funcdef, expr.args[0])
-          assert isinstance(arg_type, last.IterType)
-          if arg_type.base is _RANGE_TYPE:
-            value_type = _KEYWORDS['i32']
+          if isinstance(arg_type, last.IterType):
+            # TODO: probably remove this, early hacks for range/iter/next
+            if arg_type.base is _RANGE_TYPE:
+              value_type = _KEYWORDS['i32']
+            else:
+              assert False, "todo"
+            return self.tuple_struct_for_types([_KEYWORDS['bool'], value_type]).cached_type()
+          elif isinstance(arg_type, last.Type) and isinstance(arg_type.base, last.Struct):
+            # Find __next__() func for type and determine its return type
+            next_func_name = '%s$__next__' % arg_type.base.name
+            ste_in_globals = self.globals.get(next_func_name)
+            if ste_in_globals:
+              in_globals = ste_in_globals.ref_node
+              if not self.resolve_function_return_type(in_globals):
+                return None  # TODO: test for this case, can it get hit?
+              return in_globals.rtype
+            else:
+              self.error_at(expr, 'no __next__ found for "%s"' % arg_type.base.name)
           else:
             assert False, "todo"
-          return self.tuple_struct_for_types([_KEYWORDS['bool'], value_type]).cached_type()
 
         ste_in_globals = self.globals.get(expr.func.name)
         in_globals = ste_in_globals.ref_node

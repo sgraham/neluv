@@ -1,0 +1,45 @@
+def fib(int n):
+  if n < 2:
+    return n
+  return fib(n - 1) + fib(n - 2)
+
+struct MyFibCollectionIter:
+  int cur
+
+on MyFibCollectionIter:
+  def __next__(*MyFibCollectionIter self):
+    ret = fib(self.cur)
+    self.cur = self.cur + 1
+    return true, ret
+
+def main():
+  fibs = MyFibCollectionIter(0)
+
+  x = next(fibs)
+  printint(x._1)
+
+  x = next(fibs)
+  printint(x._1)
+
+  x = next(fibs)
+  printint(x._1)
+
+  x = next(fibs)
+  printint(x._1)
+
+  x = next(fibs)
+  printint(x._1)
+
+  x = next(fibs)
+  printint(x._1)
+
+  x = next(fibs)
+  printint(x._1)
+---
+0
+1
+1
+2
+3
+5
+8

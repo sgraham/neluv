@@ -252,6 +252,11 @@ class Union(AstNode):
   members: list[Type]
 
 @dataclass
+class On(AstNode):
+  name: str
+  block: Block
+
+@dataclass
 class Tuple(AstNode):
   items: list[AstNode]
 
