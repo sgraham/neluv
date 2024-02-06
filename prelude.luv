@@ -19,5 +19,11 @@ on RangeIter:
     self.cur = self.cur + self.obj.step
     return true, ret
 
-def range(n):  // TODO: magic 3 param version
+def range(int n):  // TODO: magic 3 arg range() via a macro
   return Range(0, n, 1)
+
+// TODO: implement here with macros:
+// iter()
+// next()
+// enumerate()
+

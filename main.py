@@ -330,7 +330,7 @@ class ToAst(Transformer):
     return last.TopLevel(last.Block(children))
 
 class Parser:
-  def __init__(self):
+  def __init__(self, prelude):
     #self.parser = Lark_StandAlone(postlex=PythonIndenter())
     # TODO: Bailed on LR(1) due to var decl syntax:
     # e.g.
@@ -349,9 +349,12 @@ class Parser:
                        #debug=True,
                        strict=True)
 
-  def parse(self, code):
+    self.prelude = prelude
+
+  def parse(self, code, include_prelude=True):
     try:
-      return self.parser.parse(code)
+      before = self.prelude if include_prelude else ''
+      return self.parser.parse(before + code)
     except UnexpectedToken as err:
       return Tree('error', children=[last.ParseError(err.line, err.column, err.token)])
 
@@ -390,30 +393,14 @@ class Compiler:
     self.ast_root = ast_root
     self.parser = parser
 
-    #print('START ------------------')
-    #pprint.pprint(self.ast_root)
-
     self.current_function = None
 
     self.find_globals()
-    #print('AFTER FIND_GLOBALS ------------------')
-    #pprint.pprint(self.ast_root)
-
+    self.resolve_type_names()
     self.build_function_symtabs()
-    #print('AFTER SYMTABS ------------------')
-    #pprint.pprint(self.ast_root)
-
     self.hoist_nested_functions()
-    #print('AFTER HOIST ------------------')
-    #pprint.pprint(self.ast_root)
-
     self.resolve_idents()
-    #print('AFTER RESOLVE IDENTS ------------------')
-    #pprint.pprint(self.ast_root)
-
     self.infer_types()
-    #print('AFTER INFER TYPES ------------------')
-    #pprint.pprint(self.ast_root)
 
     for contained, gsi in self.generated_structs.items():
       self.globals[gsi.struct.name] = last.SymTabEntry(gsi.node, gsi.struct)
@@ -586,6 +573,7 @@ class Compiler:
         self.insert_global_or_error(x)
       # TODO: multiple return tuple assignments
 
+  def resolve_type_names(self):
     # Resolve idents in structs to point at other structs (TODO: should this be here?)
     # XXX this is ugly
     # XXX doesn't handle nested types either
@@ -597,9 +585,19 @@ class Compiler:
         for f in obj.members:
           if isinstance(f.type, last.Ident):
             resolved = self.globals.get(f.type.name)
-            # TODO: more lax probably
             if resolved.ref_node and isinstance(resolved.ref_node, last.Struct):
               f.type = resolved.ref_node.cached_type()
+          elif isinstance(f.type, last.PointerDecl):
+            t = f.type
+            prev = None
+            while isinstance(t, last.PointerDecl):
+              prev = t
+              t = t.base
+            if isinstance(t, last.Ident):
+              resolved = self.globals.get(t.name)
+              if resolved.ref_node and isinstance(resolved.ref_node, last.Struct):
+                # TODO: rationalize why are some Type and this one directly Struct
+                prev.base = resolved.ref_node
       if isinstance(obj, last.FuncDef):
         if isinstance(obj.rtype, last.Ident):
           resolved = self.globals.get(obj.rtype.name)
@@ -622,6 +620,8 @@ class Compiler:
               if resolved.ref_node and isinstance(resolved.ref_node, last.Struct):
                 # TODO: rationalize why are some Type and this one directly Struct
                 prev.base = resolved.ref_node
+
+
 
   def find_func_defs(self, start, top_level_only=False):
     class FindFuncDef:
@@ -796,7 +796,11 @@ class Compiler:
       if isinstance(coll_type, last.ListType):
         rhs_type = coll_type.base
       elif it_type := self.parent.result_type_of_method(coll_type, '__iter__', errnode=node):
-        rhs_type = it_type
+        it_return_type = self.parent.result_type_of_method(it_type, '__next__', errnode=node)
+        assert (isinstance(it_return_type, last.Type) and
+                isinstance(it_return_type.base, last.Struct))
+        assert it_return_type.base.members[1].name == '_1'
+        rhs_type = it_return_type.base.members[1].type
       else:
         assert False, "todo %s" % coll_type
       self.resolve_ident(node.it, rhs_type, tuple_index=None)
@@ -894,11 +898,11 @@ class Compiler:
         s.func = self.current_function
         s._KEYWORDS = _KEYWORDS
       def parse_expr(s, code):
-        tree = self.parser.parse(code + '\n')
+        tree = self.parser.parse(code + '\n', include_prelude=False)
         ast = ToAst().transform(tree)
         return ast.body.entries[0]
       def parse_toplevel(s, code):
-        tree = self.parser.parse(code + '\n')
+        tree = self.parser.parse(code + '\n', include_prelude=False)
         ast = ToAst().transform(tree)
         return ast
     macro = Macro()
@@ -925,7 +929,7 @@ class Compiler:
     return self.tuple_struct_for_types(field_types)
 
   def result_type_of_method(self, iter_type, special_name, errnode):
-    assert isinstance(iter_type, last.Type) and isinstance(iter_type.base, last.Struct)
+    assert isinstance(iter_type, last.Type) and isinstance(iter_type.base, last.Struct), str(iter_type)
     assert special_name.startswith('__') and special_name.endswith('__')
     next_func_name = '%s$%s' % (iter_type.base.name, special_name)
     ste_in_globals = self.globals.get(next_func_name)
@@ -958,21 +962,14 @@ class Compiler:
         if expr.func.name == 'iter':
           assert len(expr.args) == 1
           arg_type = self.expr_type(funcdef, expr.args[0])
-          return last.IterType(_RANGE_TYPE)
+          return self.result_type_of_method(arg_type, '__iter__', errnode=expr)
 
         if expr.func.name == 'next':
           assert len(expr.args) == 1
           arg_type = self.expr_type(funcdef, expr.args[0])
-          if isinstance(arg_type, last.IterType):
-            # TODO: probably remove this, early hacks for range/iter/next
-            if arg_type.base is _RANGE_TYPE:
-              value_type = _KEYWORDS['i32']
-            else:
-              assert False, "todo"
-            return self.tuple_struct_for_types([_KEYWORDS['bool'], value_type]).cached_type()
-          elif isinstance(arg_type, last.Type) and isinstance(arg_type.base, last.Struct):
+          if isinstance(arg_type, last.Type) and isinstance(arg_type.base, last.Struct):
             # Find __next__() func for type and determine its return type
-            return self.result_type_of_method(arg_type, '__next__', expr)
+            return self.result_type_of_method(arg_type, '__next__', errnode=expr)
           else:
             assert False, "todo"
 
@@ -1236,11 +1233,19 @@ class Compiler:
 
         assert isinstance(f.its, last.Ident), "todo"
         it_name = f.its.name
-        result += '%sIterReturn %s = {0};' % (thing_mangled_c_type, it_ret_tmp)
+        iter_return_type = self.result_type_of_method(iter_type, '__next__', node)
+        iter_return_c_type = self.get_c_type(iter_return_type)
+        assert (isinstance(iter_return_type, last.Type) and
+                isinstance(iter_return_type.base, last.Struct))
+        assert iter_return_type.base.members[1].name == '_1'
+        iter_value_type = iter_return_type.base.members[1].type
+        iter_value_c_type = self.get_c_type(iter_value_type)
+        result += '%s %s = {0};' % (iter_return_c_type, it_ret_tmp)
         result += 'for(;;) {'
-        result += '%s = %sIter$__next__(&%s);' % (it_ret_tmp, thing_mangled_c_type, iter_tmp)
+        result += '%s = %s$__next__(&%s);' % (
+            it_ret_tmp, iter_mangled_c_type, iter_tmp)
         result += 'if (!(%s._0)) break;' % it_ret_tmp
-        result += '%sIterValue %s = %s._1;' % (thing_mangled_c_type, it_name, it_ret_tmp)
+        result += '%s %s = %s._1;' % (iter_value_c_type, it_name, it_ret_tmp)
 
         result += '%s$append(&%s, %s);' % (
             result_mangled_c_type, result_tmp, self.expr(node.body.result))
@@ -1743,19 +1748,21 @@ def do_tests(parser, test_list, update):
     err = (node, msg)
 
   for t in test_list:
-    print(t)
+    #print(t)
     if '.disabled.' in t:
       disabled_list.append(t)
       continue
     t = t.replace('\\', '/')
     source, expected = test_contents(t)
-    tree = parser.parse(source)
+    is_parse = t.startswith('test/parse')
+    is_type = t.startswith('test/type')
+    tree = parser.parse(source, include_prelude=not is_parse and not is_type)
     #print(tree.pretty())
     ast = ToAst().transform(tree)
     #pprint.pprint(ast)
-    if t.startswith('test/parse'):
+    if is_parse:
       got = pprint.pformat(ast)
-    elif t.startswith('test/type'):
+    elif is_type:
       err = None
       c = Compiler(t, ast, parser, error_callback=tt_error_callback)
       c_file = os.path.splitext(t)[0] + '.c'
@@ -1793,7 +1800,8 @@ def do_tests(parser, test_list, update):
   print('%d tests disabled' % len(disabled_list))
 
 def main():
-  parser = Parser()
+  prelude = open('prelude.luv', 'r', newline='\n').read()
+  parser = Parser(prelude)
 
   if len(sys.argv) >= 2 and sys.argv[1] == 'test':
     do_tests(parser, sys.argv[2:], update=False)
