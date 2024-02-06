@@ -19,6 +19,8 @@ on RangeIter:
     self.cur = self.cur + self.obj.step
     return true, ret
 
+//import_macros "prelude.mac.py"
+
 def range(int n):  // TODO: magic 3 arg range() via a macro
   return Range(0, n, 1)
 
@@ -26,4 +28,3 @@ def range(int n):  // TODO: magic 3 arg range() via a macro
 // iter()
 // next()
 // enumerate()
-
