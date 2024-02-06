@@ -16,7 +16,7 @@ on RangeIter:
     if self.cur >= self.obj.stop:
       return false, 0
     ret = self.cur
-    self.cur = self.cur + self.obj.step
+    self.cur += self.obj.step
     return true, ret
 
 //import_macros "prelude.mac.py"

@@ -1,0 +1,29 @@
+struct Obj:
+  int x
+
+def main():
+  x = 1
+  printint(x)
+  x += 1
+  printint(x)
+  y = 5
+  x -= y
+  printint(x)
+  x *= -3
+  printint(x)
+  x /= 3
+  printint(x)
+
+  obj = Obj(10)
+  obj.x += 10
+  printint(obj.x)
+  obj.x -= 20
+  printint(obj.x)
+---
+1
+2
+-3
+9
+3
+20
+0

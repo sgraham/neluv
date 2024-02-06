@@ -46,6 +46,12 @@ OP_MAP = {
     '-': '__sub__',
     '*': '__mul__',
     '/': '__div__',
+
+    '+=': '__iadd__',
+    '-=': '__isub__',
+    '*=': '__imul__',
+    '/=': '__idiv__',
+
     # TODO: more
 }
 
@@ -252,6 +258,12 @@ class ToAst(Transformer):
 
   def assign(self, children):
     return last.Assign(children[0], children[1])
+
+  def augassign(self, children):
+    return last.AugAssign(children[0], children[1], children[2])
+
+  def augassign_op(self, children):
+    return children[0]
 
   def list(self, children):
     return last.List(children)
@@ -1399,6 +1411,12 @@ class Compiler:
             return '%s = (%s){/*has*/1,/*val*/%s};' % (lhs, self.get_c_type(lhs_type), rhs)
         else:
           return '%s = %s;' % (lhs, rhs)
+    elif isinstance(node, last.AugAssign):
+      lhs_type = self.expr_type(self.current_function, node.lhs)
+      lhs_c_type = self.get_mangled_c_type(lhs_type)
+      lhs = self.expr(node.lhs)
+      rhs = self.expr(node.rhs)
+      return '%s$%s(&%s, %s);' % (lhs_c_type, OP_MAP[node.op.name], lhs, rhs)
     elif isinstance(node, last.VarDecl):
       if node.init:
         rhs = self.expr(node.init)
@@ -1568,6 +1586,10 @@ void $Str$__del__(struct $Str* self) {
 #define int32_t$__sub__(a, b) ((a)-(b))
 #define int32_t$__mul__(a, b) ((a)*(b))
 #define int32_t$__div__(a, b) ((a)/(b))
+#define int32_t$__iadd__(a, b) ((*a)+=(b))
+#define int32_t$__isub__(a, b) ((*a)-=(b))
+#define int32_t$__imul__(a, b) ((*a)*=(b))
+#define int32_t$__idiv__(a, b) ((*a)/=(b))
 
 static void printint(int x) {
   printf("%d\n", x);

@@ -47,6 +47,12 @@ class Assign(AstNode):
   rhs: AstNode
 
 @dataclass
+class AugAssign(AstNode):
+  lhs: AstNode
+  op: AstNode
+  rhs: AstNode
+
+@dataclass
 class Block(AstNode):
   entries: list[AstNode]
 
