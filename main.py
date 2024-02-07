@@ -687,6 +687,7 @@ class Compiler:
             func.symtab[i] = ste
             to_bind[i] = ste
             pending_non_local = pending_non_local_name = None
+            break
           else:
             break
       else:
@@ -728,6 +729,7 @@ class Compiler:
           # Remove the declaration from the body of the current function,
           # replacing calls to it.
           cur.body.entries.remove(nested)  # TODO: prob unnecessary O(n)
+          cur.nested_funcs_to_push_upvals.append(nested)
           self.add_to_toplevel.append(nested)
           # TODO: this is probably wrong/too simple; at least need to have
           # something to deal with a local declared with the same name as a
@@ -791,6 +793,7 @@ class Compiler:
       assert x, "ident not in scope? '%s'" % ident.name
       if x.type is _KEYWORDS['auto']:
         x.type = rhs_type
+        self.push_into_upvars(ident, x)
       else:
         if x.type != rhs_type:
           if (isinstance(x.type, last.OptionalDecl) and
@@ -876,26 +879,47 @@ class Compiler:
         if glob and isinstance(glob.ref_node, last.MacroDef):
           return self.parent.expand_macro(funccall, glob.ref_node)
 
+    # In nested_func_ref_up, the attempt to expand print(stuff()) previously
+    # failed because the type of the up value |x| in stuff() hasn't been
+    # resolved. That resolution was happening in after_FuncDef (once main() was
+    # fully traversed), but that means that the macro in the body of main()
+    # can't ask for the return type of stuff() because the upval that stuff()
+    # returns is not yet typed. Instead, push_into_upvars() pushes the reference
+    # into the nested function immediately when traversing main().
+    # TBD whether calling stuff() before `def stuff()` should be valid. It
+    # wouldn't be in Python for a different reason.
+    #
+    # Secondarily, in nested_func_ref_up_double, the |y| in things() previously
+    # was not resolved because we were only pushing into the upvals structure
+    # for the current function. To fix |y|, when hoisting nested functions we
+    # have to keep track of a list of the nested functions and then push into
+    # all of their upval structures too (FuncDef.nested_funcs_to_push_upvals)
+
+    def push_into_upvars(self, ident, x):
+      def push_into(func):
+        for nested_name, uvb in func.upval_bindings.items():
+          # Resolving references to upvals that were previously untyped
+          # (|x| in test/run/nested_func_ref_up.luv)
+          ste = uvb.to_bind.get(ident.name)
+          if ste:
+            assert ste.is_upval and ste.func_ref_if_upval
+            if ste.type is _KEYWORDS['auto']:
+              ste.type = ste.func_ref_if_upval.symtab[ident.name].type
+
+              # And also the members of the upval structure
+              # (|y| in test/run/nested_func_ref_up_double.luv).
+              for mem in uvb.struct.members:
+                if mem.name == ident.name:
+                  mem.type = ste.type
+
+      push_into(self.parent.current_function)
+      for f in self.parent.current_function.nested_funcs_to_push_upvals:
+        push_into(f)
+
     def after_FuncDef(self, func):
       assert self.parent.current_function == func
-      for nested_name, uvb in func.upval_bindings.items():
-        # Resolving references to upvals that were previously untyped
-        # (|x| in test/run/nested_func_ref_up.luv)
-        for ident, ste in uvb.to_bind.items():
-          assert ste.is_upval and ste.func_ref_if_upval
-          if ste.type is _KEYWORDS['auto']:
-            ste.type = ste.func_ref_if_upval.symtab[ident].type
-
-            # And also the members of the upval structure
-            # (|y| in test/run/nested_func_ref_up_double.luv).
-            for mem in uvb.struct.members:
-              if mem.name == ident:
-                mem.type = ste.type
-
       self.parent.current_function = None
 
-    def visit_Struct(self, struct):
-      pass
 
   def resolve_idents(self):
     resolver = self.ResolveIdents(self)
@@ -910,8 +934,12 @@ class Compiler:
         s.args = node.args
         s.block = None
         s.func = self.current_function
-        s.expr_type = lambda x: self.expr_type(self.current_function, x)
         s.keywords = _KEYWORDS
+      def expr_type(s, node):
+        ret = self.expr_type(self.current_function, node)
+        if ret is _KEYWORDS['auto']:
+          assert False, 'internal error, unable to get type for "%s"' % node
+        return ret
       def parse_expr(s, code):
         tree = self.parser.parse(code + '\n', include_prelude=False)
         ast = ToAst().transform(tree)

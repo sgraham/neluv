@@ -114,6 +114,7 @@ class FuncDef(AstNode):
   def __post_init__(self):
     self.symtab = {}  # values are SymTabEntry
     self.upval_bindings = {}  # names are funcname, values are UpvalBindings
+    self.nested_funcs_to_push_upvals = []
 
 @dataclass
 class ImportMacros(AstNode):

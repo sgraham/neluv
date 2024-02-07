@@ -50,7 +50,7 @@ on List$T_Iter:
 # Don't forget to use __builtins__['print'], etc. when debugging this function.
 def print(macro):
     result = []
-    for i,a in enumerate(macro.args):
+    for i,a in __builtins__['enumerate'](macro.args):
         ty = macro.expr_type(a)
         if ty is macro.keywords['i32']:
             result.append(last.FuncCall(last.Ident('printint'), [a]))

@@ -8,8 +8,7 @@ def main():
   print(x)
   print(y)
   x = 12
-  printint(stuff())  // TODO: expr_type fails during macro
-  printnl()
+  print(stuff())
 ---
 7
 8

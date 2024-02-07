@@ -5,8 +5,7 @@ def main():
     x = 4
     return x
   print(x)
-  printint(stuff())  // TODO: expr_type
-  printnl()
+  print(stuff())
   print(x)
 ---
 12
