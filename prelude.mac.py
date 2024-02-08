@@ -47,6 +47,19 @@ on List$T_Iter:
         return true, ret
 '''
 
+def range(macro):
+    def buildit(a, b, c):
+        return last.FuncCall(last.Ident('Range'), args=[a,b,c])
+
+    if len(macro.args) == 1:
+        return buildit(last.Number(0), macro.args[0], last.Number(1))
+    elif len(macro.args) == 2:
+        return buildit(macro.args[0], macro.args[1], last.Number(1))
+    elif len(macro.args) == 3:
+        return buildit(macro.args[0], macro.args[1], macro.args[2])
+    else:
+        assert False, "unexpected number of args to range()"
+
 # Don't forget to use __builtins__['print'], etc. when debugging this function.
 def print(macro):
     result = []

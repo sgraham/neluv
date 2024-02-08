@@ -13,18 +13,20 @@ on Range:
 
 on RangeIter:
   def __next__(*RangeIter self):
-    if self.cur >= self.obj.stop:
-      return false, 0
+    if self.obj.step < 0:
+      if self.cur <= self.obj.stop:
+        return false, 0
+    else:
+      if self.cur >= self.obj.stop:
+        return false, 0
     ret = self.cur
     self.cur += self.obj.step
     return true, ret
 
 import_macros "prelude.mac.py"
 
-def range(int n):  // TODO: magic 3 arg range() via a macro
-  return Range(0, n, 1)
-
 // TODO: implement here with macros:
 // iter()
 // next()
 // enumerate()
+// len()
