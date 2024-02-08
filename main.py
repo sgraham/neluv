@@ -1075,6 +1075,8 @@ class Compiler:
     elif isinstance(expr, last.Ident):
       if ste := funcdef.symtab.get(expr.name):
         return ste.type
+      if ste := self.globals.get(expr.name):
+        return ste.type
       assert False, "unhandled Ident expr_type %s" % expr
     elif isinstance(expr, last.Expr):
       t0 = self.expr_type(funcdef, expr.chain[0])

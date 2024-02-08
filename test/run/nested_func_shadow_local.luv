@@ -3,8 +3,7 @@ def main():
   def stuff():
     x = 4
     return x
-  printint(stuff())  // TODO: expr_type
-  printnl()
+  print(stuff())
   print(x)
 ---
 4

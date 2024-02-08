@@ -1,12 +1,10 @@
 int x = 11
 def sub():
   x = 59
-  printint(x)  // TODO: expr_type
-  printnl()
+  print(x)
 def main():
   sub()
-  printint(x)  // TODO: expr_type
-  printnl()
+  print(x)
 ---
 59
 11
