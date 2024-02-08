@@ -6,8 +6,7 @@ def main():
       x = 77
       return x
     return things()
-  printint(stuff())  // TODO: expr_type
-  printnl()
+  print(stuff())
   print(x)
 ---
 77

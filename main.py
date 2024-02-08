@@ -406,6 +406,7 @@ class Compiler:
     self.parser = parser
 
     self.current_function = None
+    self.current_function_saved = []
 
     self.find_globals()
     self.resolve_type_names()
@@ -894,6 +895,20 @@ class Compiler:
     # for the current function. To fix |y|, when hoisting nested functions we
     # have to keep track of a list of the nested functions and then push into
     # all of their upval structures too (FuncDef.nested_funcs_to_push_upvals)
+    #
+    # TODO:
+    # Thirdly, nested_func_ref_up_double_mixed.luv tries to resolve the type of
+    # stuff(), which requires the return type of its nested function things().
+    # Determining the return value of stuff() currently only walks the body
+    # looking for returns and tries to type those. However, in order to type
+    # things(), it needs to first walk the rest of the body of stuff() so that
+    # |z| will be resolved and pushed as an upvar into things(). So some
+    # reordering is required here. Since macro calls are during
+    # resolve_idents(), resolve_function_return_type() should probably be a full
+    # walk of the items of the function, rather than skimming through to get
+    # only return statements. Maybe just a resolve_idents() of the stuff()
+    # first? And we probably need a tag on ast nodes to say they're resolved to
+    # avoid redoing things over and over.
 
     def push_into_upvars(self, ident, x):
       def push_into(func):
@@ -912,18 +927,26 @@ class Compiler:
                 if mem.name == ident.name:
                   mem.type = ste.type
 
+        for f in func.nested_funcs_to_push_upvals:
+          push_into(f)
+
       push_into(self.parent.current_function)
-      for f in self.parent.current_function.nested_funcs_to_push_upvals:
-        push_into(f)
 
     def after_FuncDef(self, func):
       assert self.parent.current_function == func
       self.parent.current_function = None
 
 
-  def resolve_idents(self):
+  def resolve_idents(self, start_at=None):
+    if start_at:
+      self.current_function_saved.append(self.current_function)
+      self.current_function = None
+
     resolver = self.ResolveIdents(self)
-    self.Visit(resolver, self.ast_root)
+    self.Visit(resolver, self.ast_root if not start_at else start_at)
+
+    if start_at:
+      self.current_function = self.current_function_saved.pop()
 
   def expand_macro(self, node, mac):
     assert (isinstance(node, last.FuncCall) and isinstance(node.func, last.Ident)
@@ -1095,6 +1118,7 @@ class Compiler:
     if getattr(fd, 'resolving_return_type', None):
       return False
     setattr(fd, 'resolving_return_type', True)
+    self.resolve_idents(fd)
     returns = self.find_return_stmts(fd.body)
     if not returns:
       fd.rtype = _KEYWORDS['void']
