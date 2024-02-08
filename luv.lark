@@ -78,7 +78,8 @@ assert_stmt: "assert" test ["," test]
                 | funcdef | structdef | uniondef | macro_with_block_stmt
                 | import_macros_stmt | on_block
 if_stmt: "if" (test | optional_unwrap) ":" suite elifs ["else" ":" suite]
-optional_unwrap: test "as" name
+optional_unwrap: test "as" unwrap_target
+?unwrap_target: name -> ident
 elifs: elif_*
 elif_: "elif" (test | optional_unwrap) ":" suite
 while_stmt: "while" test ":" suite ["else" ":" suite]

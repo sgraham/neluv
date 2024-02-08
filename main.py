@@ -454,8 +454,13 @@ class Compiler:
         self.func.symtab[ident.name] = last.SymTabEntry(
             _KEYWORDS['auto'], ident, is_declared_local=True)
       elif x.is_pending_nonlocal and self.parent.is_lexically_before(ident, x.ref_node):
-        self.parent.error_at(ident,
-            'name "%s" is used before nonlocal declaration' % ident.name)
+        self.parent.error_at(ident, 'name "%s" is used before nonlocal declaration' % ident.name)
+
+    def visit_OptionalUnwrap(self, unwrap):
+      # TODO: This is sort of python-y but not good either. The bind target is
+      # function scope like all locals, but that doesn't really make sense for
+      # an if block style unwrap.
+      self.local(unwrap.bind)
 
     def visit_Assign(self, node):
       if isinstance(node.lhs, last.Ident):
@@ -842,6 +847,12 @@ class Compiler:
         struct = last.Struct(opt_struct_name, members)
         struct.omit_constructor = True
         self.parent.generated_structs[c_base_type_name] = GeneratedStructInfo(od, struct)
+
+    def visit_OptionalUnwrap(self, ou):
+      assert isinstance(ou.bind, last.Ident)
+      opt_type = self.parent.expr_type(self.parent.current_function, ou.optexpr)
+      assert isinstance(opt_type, last.OptionalDecl)
+      self.resolve_ident(ou.bind, opt_type.base, tuple_index=None)
 
     def visit_Tuple(self, tc):
       field_types = [self.parent.expr_type(self.parent.current_function, v) for v in tc.items]
@@ -1386,7 +1397,7 @@ class Compiler:
         opttype = self.expr_type(self.current_function, node.cond.optexpr)
         assert isinstance(opttype, last.OptionalDecl)
         result += '%s %s = (%s).val;' % (
-            self.get_c_type(opttype.base), node.cond.bind, self.expr(node.cond.optexpr))
+            self.get_c_type(opttype.base), node.cond.bind.name, self.expr(node.cond.optexpr))
         result += self.stmt(node.body)
         result += '}'
       else:

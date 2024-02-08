@@ -2,7 +2,7 @@ def main():
   z = 4
   def inner():
     int z = 4
-    printint(z)
+    print(z)
     nonlocal z
 ---
 !

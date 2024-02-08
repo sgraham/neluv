@@ -2,7 +2,7 @@ import_macros "my.mac.py"
 
 def main():
   x = test()
-  printint(x)
+  print(x)
 ---
 TopLevel(body=Block(entries=[ImportMacros(filename=String(value='my.mac.py')),
                              FuncDef(rtype=Type(base='auto'),
@@ -11,6 +11,6 @@ TopLevel(body=Block(entries=[ImportMacros(filename=String(value='my.mac.py')),
                                      body=Block(entries=[Assign(lhs=Ident(name='x'),
                                                                 rhs=FuncCall(func=Ident(name='test'),
                                                                              args=[])),
-                                                         FuncCall(func=Ident(name='printint'),
+                                                         FuncCall(func=Ident(name='print'),
                                                                   args=[Ident(name='x')])]),
                                      hidden=False)]))

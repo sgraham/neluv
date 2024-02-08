@@ -1,9 +1,9 @@
 def main():
-  printstr("hello")
+  print("hello")
 ---
 TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
                                      name='main',
                                      params=[],
-                                     body=Block(entries=[FuncCall(func=Ident(name='printstr'),
+                                     body=Block(entries=[FuncCall(func=Ident(name='print'),
                                                                   args=[String(value='hello')])]),
                                      hidden=False)]))
