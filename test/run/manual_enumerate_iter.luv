@@ -6,11 +6,10 @@ def fib(int n):
 struct MyFibCollectionIter:
   int cur
 
-on MyFibCollectionIter:
-  def __next__(*MyFibCollectionIter self):
-    ret = fib(self.cur)
-    self.cur = self.cur + 1
-    return true, ret
+on MyFibCollectionIter def __next__(self):
+  ret = fib(self.cur)
+  self.cur = self.cur + 1
+  return true, ret
 
 def main():
   fibs = MyFibCollectionIter(0)

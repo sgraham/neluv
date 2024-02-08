@@ -253,9 +253,6 @@ class ToAst(Transformer):
   def name(self, children):
     return children[0]
 
-  def single_dot_name(self, children):
-    return last.MethodName(children[0], children[1])
-
   def assign(self, children):
     return last.Assign(children[0], children[1])
 
@@ -282,6 +279,17 @@ class ToAst(Transformer):
                           children[2] or [],
                           children[3])
     assert False, "unhandled case in funcdef"
+
+  def methoddef(self, children):
+    struct = children[0]
+    rtype = children[1] or _KEYWORDS['auto']
+    funcname = children[2]
+    selfname = children[3]
+    args = children[4] or []
+    body = children[5]
+    args_with_self = [last.TypedVar(last.PointerDecl(last.Ident(struct)), selfname)] + args
+    return last.FuncDef(rtype, struct + '$' + funcname, args_with_self, body)
+    return None
 
   def import_macros_stmt(self, children):
     return last.ImportMacros(children[0])
@@ -535,8 +543,6 @@ class Compiler:
 
   def insert_global_or_error(self, node):
     name = node.name
-    if isinstance(name, last.MethodName):
-      name = '%s__$__%s' % (name.struct, name.methodname)
     if self.globals.get(name):
       self.error_at(node, 'redefinition at global scope of "%s"' % name)
     ty = None

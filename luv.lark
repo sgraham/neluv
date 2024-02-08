@@ -3,8 +3,8 @@
 
 start: (_NEWLINE | stmt)*
 
-funcdef: "def" [returntype] (name | single_dot_name) "(" [parameters] ")" ":" suite
-single_dot_name: name "." name
+methoddef: "on" name "def" [returntype] name "(" name ["," parameters] ")" ":" suite
+funcdef: "def" [returntype] name "(" [parameters] ")" ":" suite
 
 // This is a big hack because I couldn't figure out how to slurp everything
 // under a `macro blah:` to pass to python. If/when the parser is rewritten to
@@ -75,8 +75,8 @@ nonlocal_stmt: "nonlocal" name ("," name)*
 assert_stmt: "assert" test ["," test]
 
 ?compound_stmt: if_stmt | while_stmt | for_stmt | with_stmt
-                | funcdef | structdef | uniondef | macro_with_block_stmt
-                | import_macros_stmt | on_block
+                | funcdef | methoddef | structdef | uniondef | macro_with_block_stmt
+                | import_macros_stmt
 if_stmt: "if" (test | optional_unwrap) ":" suite elifs ["else" ":" suite]
 optional_unwrap: test "as" unwrap_target
 ?unwrap_target: name -> ident
@@ -84,8 +84,6 @@ elifs: elif_*
 elif_: "elif" (test | optional_unwrap) ":" suite
 while_stmt: "while" test ":" suite ["else" ":" suite]
 for_stmt: "for" [exprlist "in"] testlist ":" suite ["else" ":" suite]
-
-on_block: "on" name ":" suite
 
 with_stmt: "with" with_items ":" suite
 with_items: with_item ("," with_item)*

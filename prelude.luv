@@ -7,21 +7,19 @@ struct RangeIter:
   *Range obj
   int cur
 
-on Range:
-  def __iter__(*Range self):
-    return RangeIter(self, self.start)
+on Range def __iter__(self):
+  return RangeIter(self, self.start)
 
-on RangeIter:
-  def __next__(*RangeIter self):
-    if self.obj.step < 0:
-      if self.cur <= self.obj.stop:
-        return false, 0
-    else:
-      if self.cur >= self.obj.stop:
-        return false, 0
-    ret = self.cur
-    self.cur += self.obj.step
-    return true, ret
+on RangeIter def __next__(self):
+  if self.obj.step < 0:
+    if self.cur <= self.obj.stop:
+      return false, 0
+  else:
+    if self.cur >= self.obj.stop:
+      return false, 0
+  ret = self.cur
+  self.cur += self.obj.step
+  return true, ret
 
 import_macros "prelude.mac.py"
 

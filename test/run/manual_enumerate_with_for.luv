@@ -6,18 +6,16 @@ def fib(int n):
 struct MyFibCollection:
   int unused  // TODO: support pass here maybe
 
-on MyFibCollection:
-  def __iter__(*MyFibCollection self):
-    return CustomIter(0)
+on MyFibCollection def __iter__(self):
+  return CustomIter(0)
 
 struct CustomIter:
   int cur
 
-on CustomIter:
-  def __next__(*CustomIter self):
-    ret = fib(self.cur)
-    self.cur = self.cur + 1
-    return true, ret
+on CustomIter def __next__(self):
+  ret = fib(self.cur)
+  self.cur = self.cur + 1
+  return true, ret
 
 def main():
   fibs = MyFibCollection(-1)
