@@ -3,11 +3,16 @@ struct A:
 
 on A def int something(self, int y, int z):
   print("something", self.x, y, z)
+  return 11
 
 on A def stuff(self):
   print("stuff", self.x)
 
 def main():
   a = A(44)
-  a.something(33, 22)
+  print(a.something(33, 22))
   a.stuff()
+---
+something 44 33 22
+11
+stuff 44

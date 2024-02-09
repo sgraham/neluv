@@ -1011,18 +1011,20 @@ class Compiler:
     field_types = [self.expr_type(func, v) for v in values]
     return self.tuple_struct_for_types(field_types)
 
-  def result_type_of_method(self, iter_type, special_name, errnode):
-    assert isinstance(iter_type, last.Type) and isinstance(iter_type.base, last.Struct), str(iter_type)
-    assert special_name.startswith('__') and special_name.endswith('__')
-    next_func_name = '%s$%s' % (iter_type.base.name, special_name)
-    ste_in_globals = self.globals.get(next_func_name)
+  def method_name(self, static_type, method_name):
+    return '%s$%s' % (static_type.base.name, method_name)
+
+  def result_type_of_method(self, static_type, method_name, errnode):
+    assert isinstance(static_type, last.Type) and isinstance(static_type.base, last.Struct), str(static_type)
+    func_name = self.method_name(static_type, method_name)
+    ste_in_globals = self.globals.get(func_name)
     if ste_in_globals:
       in_globals = ste_in_globals.ref_node
       if not self.resolve_function_return_type(in_globals):
         return None  # TODO: test for this case, can it get hit?
       return in_globals.rtype
     else:
-      self.error_at(errnode, 'no __next__ found for "%s"' % iter_type.base.name)
+      self.error_at(errnode, 'no %s found on "%s"' % (method_name, static_type.base.name))
 
   def expr_type(self, funcdef, expr):
     if expr is None:
@@ -1071,6 +1073,9 @@ class Compiler:
         elif isinstance(in_globals, last.MacroDef):
           macro_expansion = self.expand_macro(expr, in_globals)
           return self.expr_type(funcdef, macro_expansion)
+      elif isinstance(expr.func, last.GetAttr):
+        lhs_type = self.expr_type(funcdef, expr.func.lhs)
+        return self.result_type_of_method(lhs_type, expr.func.rhs, errnode=expr.func)
     elif isinstance(expr, last.CompExpr):
       assert len(expr.chain) == 3, "todo"
       if expr.chain[1].name in ('==', '!=', '<=', '<', '>', '>='):
@@ -1285,7 +1290,16 @@ class Compiler:
         else:
           self.error_at(node.func, 'incorrect number of arguments to "next"')
 
-      result = self.expr(node.func)
+      self_inject = []
+      if isinstance(node.func, last.GetAttr):
+        lhs_type = self.expr_type(self.current_function, node.func.lhs)
+        result_type = self.result_type_of_method(lhs_type, node.func.rhs, errnode=node.func)
+        # TODO: need lval context to self.expr
+        self_inject.append(last.Ident('&' + self.expr(node.func.lhs)))
+        result = self.method_name(lhs_type, node.func.rhs)
+      else:
+        result = self.expr(node.func)
+
       result += '('
 
       upvals = []
@@ -1297,7 +1311,7 @@ class Compiler:
             # TODO: double hacky, sneaky & here.
             upvals.append(last.Ident('&' + has_uv.parent_binding_name))
 
-      result += ','.join(self.expr(x) for x in (upvals + node.args))
+      result += ','.join(self.expr(x) for x in (upvals + self_inject + node.args))
       result += ')'
       return result
     elif isinstance(node, last.ListComprehension):
