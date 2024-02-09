@@ -1,0 +1,4 @@
+def main():
+  x = 4
+  assert x > 2 and x < 100
+  assert x == 4 or false

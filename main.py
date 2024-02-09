@@ -157,6 +157,12 @@ class ToAst(Transformer):
     assert (len(children) - 3) % 2 == 0
     return last.Expr(children)
 
+  def and_test(self, children):
+    return last.And(children)
+
+  def or_test(self, children):
+    return last.Or(children)
+
   def factor(self, children):
     if len(children) == 2:
       return last.UnaryExpr(children[0], children[1])
@@ -216,6 +222,9 @@ class ToAst(Transformer):
 
   def pass_stmt(self, children):
     return last.Pass()
+
+  def assert_stmt(self, children):
+    return last.Assert(children[0], children[1])
 
   def nonlocal_stmt(self, children):
     return last.Nonlocal(children)
@@ -1429,6 +1438,10 @@ class Compiler:
     elif isinstance(node, last.Tuple):
       struct = self.tuple_struct_for_values(self.current_function, node.items)
       return '(struct %s){' % struct.name + ','.join(self.expr(v) for v in node.items) + '}'
+    elif isinstance(node, last.And):
+      return '&&'.join(self.expr(x) for x in node.tests)
+    elif isinstance(node, last.Or):
+      return '||'.join(self.expr(x) for x in node.tests)
     else:
       raise RuntimeError("unhandled expr node %s" % node)
 
@@ -1552,6 +1565,12 @@ class Compiler:
           return '%s = %s;' % (lhs, rhs)
       else:
         return ''
+    elif isinstance(node, last.Assert):
+      result = '#ifndef NDEBUG // assert\nif (!(%s)){' % self.expr(node.expr)
+      if node.message is not None:
+        result += 'printf("%s\n");' % self.expr(node.message)
+      result += 'assert(0);}\n#endif  // assert NDEBUG\n'
+      return result
     elif isinstance(node, last.Nonlocal):
       return '/* NONLOCAL %s */;' % ', '.join(node.vars)
     elif isinstance(node, last.FuncDef):

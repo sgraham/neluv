@@ -147,6 +147,11 @@ class MacroCallWithBlock(AstNode):
   body: Block
 
 @dataclass
+class Assert(AstNode):
+  expr: AstNode
+  message: AstNode
+
+@dataclass
 class Return(AstNode):
   value: AstNode
 
@@ -215,6 +220,14 @@ class Expr(AstNode):
   # 3 + 2n long:
   #   VAL0 op0 VAL1 [op1 VAL2 ...]
   chain: list[AstNode]
+
+@dataclass
+class And(AstNode):
+  tests: list[AstNode]
+
+@dataclass
+class Or(AstNode):
+  tests: list[AstNode]
 
 @dataclass
 class CompExpr(AstNode):
