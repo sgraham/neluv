@@ -6,7 +6,6 @@ endif
 syn case match
 
 " Keywords
-syn keyword     luvKeyword       alloc
 syn keyword     luvKeyword       and
 syn keyword     luvKeyword       as
 syn keyword     luvKeyword       assert
@@ -17,9 +16,10 @@ syn keyword     luvKeyword       def
 syn keyword     luvKeyword       del
 syn keyword     luvKeyword       elif
 syn keyword     luvKeyword       else
+syn keyword     luvKeyword       external
 syn keyword     luvKeyword       false
 syn keyword     luvKeyword       for
-syn keyword     luvKeyword       global
+syn keyword     luvKeyword       from
 syn keyword     luvKeyword       if
 syn keyword     luvKeyword       import
 syn keyword     luvKeyword       import_macros
@@ -32,7 +32,6 @@ syn keyword     luvKeyword       on
 syn keyword     luvKeyword       or
 syn keyword     luvKeyword       pass
 syn keyword     luvKeyword       return
-syn keyword     luvKeyword       scoped
 syn keyword     luvKeyword       sizeof
 syn keyword     luvKeyword       struct
 syn keyword     luvKeyword       true

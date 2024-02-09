@@ -1,0 +1,9 @@
+def *void malloc(u64 size): external
+def void free(*void ptr): external
+
+def main():
+  p = malloc(33)
+  print(p != null)
+  free(p)
+---
+true

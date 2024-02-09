@@ -116,6 +116,26 @@ class ImportMacros(AstNode):
   filename: str
 
 @dataclass
+class ImportPackage(AstNode):
+  what: AstNode
+  renamed: AstNode
+
+@dataclass
+class ImportItem(AstNode):
+  what: AstNode
+  renamed: AstNode
+
+@dataclass
+class Import(AstNode):
+  package: ImportPackage
+  items: list[ImportItem]
+
+@dataclass
+class ImportFrom(AstNode):
+  package: ImportPackage
+  items: list[ImportItem]
+
+@dataclass
 class MacroDef(AstNode):
   name: str
   pyfunc: object
@@ -169,6 +189,10 @@ class Continue(AstNode):
 
 @dataclass
 class Pass(AstNode):
+  pass
+
+@dataclass
+class External(AstNode):
   pass
 
 @dataclass

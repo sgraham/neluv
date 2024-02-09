@@ -1,0 +1,35 @@
+import C
+import C as blah
+from C import malloc as moo
+from C import malloc as moo, free as woof
+from C import malloc
+from C import *
+from C.D import free as bloop
+---
+TopLevel(body=Block(entries=[Import(package=[ImportPackage(what=['C'],
+                                                           renamed=None)],
+                                    items=None),
+                             Import(package=[ImportPackage(what=['C'],
+                                                           renamed='blah')],
+                                    items=None),
+                             ImportFrom(package=ImportPackage(what=['C'],
+                                                              renamed=None),
+                                        items=[ImportItem(what='malloc',
+                                                          renamed='moo')]),
+                             ImportFrom(package=ImportPackage(what=['C'],
+                                                              renamed=None),
+                                        items=[ImportItem(what='malloc',
+                                                          renamed='moo'),
+                                               ImportItem(what='free',
+                                                          renamed='woof')]),
+                             ImportFrom(package=ImportPackage(what=['C'],
+                                                              renamed=None),
+                                        items=[ImportItem(what='malloc',
+                                                          renamed=None)]),
+                             ImportFrom(package=ImportPackage(what=['C'],
+                                                              renamed=None),
+                                        items=None),
+                             ImportFrom(package=ImportPackage(what=['C', 'D'],
+                                                              renamed=None),
+                                        items=[ImportItem(what='free',
+                                                          renamed='bloop')])]))

@@ -205,6 +205,35 @@ class ToAst(Transformer):
   def macro_with_block_stmt(self, children):
     return last.MacroCallWithBlock(children[0], children[1])
 
+  def import_stmt(self, children):
+    return children[0]
+
+  def import_from(self, children):
+    if not isinstance(children[0], last.ImportPackage):
+      c0 = last.ImportPackage(children[0], None)
+    if len(children) == 1:
+      return last.ImportFrom(c0, None)
+    else:
+      return last.ImportFrom(c0, children[1])
+
+  def import_name(self, children):
+    return last.Import(children[0], None)
+
+  def import_as_names(self, children):
+    return children
+
+  def import_as_name(self, children):
+    return last.ImportItem(children[0], children[1])
+
+  def dotted_as_names(self, children):
+    return children
+
+  def dotted_as_name(self, children):
+    return last.ImportPackage(children[0], children[1])
+
+  def dotted_name(self, children):
+    return children
+
   def on_block(self, children):
     return last.On(children[0], children[1])
 
@@ -222,6 +251,9 @@ class ToAst(Transformer):
 
   def pass_stmt(self, children):
     return last.Pass()
+
+  def external_stmt(self, children):
+    return last.External()
 
   def assert_stmt(self, children):
     return last.Assert(children[0], children[1])
@@ -599,7 +631,12 @@ class Compiler:
             self.error_at(f, 'expecting only function definitions in "on" block')
           f.name = '%s$%s' % (tl.name, f.name)
           self.insert_global_or_error(f)
+      elif isinstance(tl, last.Import):
+        pprint.pprint(tl)
+      elif isinstance(tl, last.ImportFrom):
+        pprint.pprint(tl)
       else:
+        pprint.pprint(tl)
         self.error_at(tl, 'unexpected at top level %s' % tl)
 
     for i, tl in enumerate(self.ast_root.body.entries):
@@ -1566,6 +1603,7 @@ class Compiler:
       else:
         return ''
     elif isinstance(node, last.Assert):
+      # clang-format is de-wrapping the `if` if there's no comment?
       result = '#ifndef NDEBUG // assert\nif (!(%s)){' % self.expr(node.expr)
       if node.message is not None:
         result += 'printf("%s\n");' % self.expr(node.message)
@@ -1575,6 +1613,13 @@ class Compiler:
       return '/* NONLOCAL %s */;' % ', '.join(node.vars)
     elif isinstance(node, last.FuncDef):
       return '/* HOISTED %s */;' % node.name
+    elif isinstance(node, last.Import):
+      # somethign like make GetAttr also understand a package structure (which
+      # can be compile time only?) as well as adding aliases to globals that
+      # allow for renames for from imports.
+      return '/* TODO: import! */'
+    elif isinstance(node, last.ImportFrom):
+      return '/* TODO: from import! */'
     else:
       return self.expr(node) + ';'
 
@@ -1597,6 +1642,8 @@ class Compiler:
     return '%s%s %s(%s)' % (is_static, rtype, fname, params)
 
   def function_definition(self, func):
+    if len(func.body.entries) == 1 and isinstance(func.body.entries[0], last.External):
+      return '\n// %s was external\n' % func.name
     result = self.function_forward_declaration(func)
     self.current_function = func
     result += '{'
@@ -1925,9 +1972,9 @@ def do_tests(parser, test_list, update):
     is_parse = t.startswith('test/parse')
     is_type = t.startswith('test/type')
     tree = parser.parse(source, include_prelude=not is_parse and not is_type)
-    #print(tree.pretty())
+    print(tree.pretty())
     ast = ToAst().transform(tree)
-    #pprint.pprint(ast)
+    pprint.pprint(ast)
     if is_parse:
       got = pprint.pformat(ast)
     elif is_type:
