@@ -27,6 +27,9 @@ _KEYWORDS = {
   'u8': last.Type('u8'),
   'void': last.Type('void'),
 
+  'float': last.Type('f32'),
+  'double': last.Type('f64'),
+
   'false': last.Const('false'),
   'null': last.Const('null'),
   'true': last.Const('true'),
@@ -1049,6 +1052,10 @@ class Compiler:
           arg_type = self.expr_type(funcdef, expr.args[0])
           return self.result_type_of_method(arg_type, '__iter__', errnode=expr)
 
+        if expr.func.name == 'sizeof':
+          assert len(expr.args) == 1
+          return _KEYWORDS['int']   # TODO: 32/64
+
         if expr.func.name == 'next':
           assert len(expr.args) == 1
           arg_type = self.expr_type(funcdef, expr.args[0])
@@ -1136,6 +1143,8 @@ class Compiler:
       return obj.base
     elif isinstance(expr, last.Tuple):
       return self.tuple_struct_for_values(funcdef, expr.items).cached_type()
+    elif isinstance(expr, last.Type):
+      return expr  # This is needed for sizeof(), not sure if it's a good idea here.
     assert False, "unhandled expr_type %s" % expr
 
   def resolve_function_return_type(self, fd):
@@ -1174,20 +1183,32 @@ class Compiler:
 
   def get_c_type(self, node):
     assert node is not _KEYWORDS['auto']
+    if node == _KEYWORDS['i8']:
+      return 'int8_t'
+    if node == _KEYWORDS['i16']:
+      return 'int16_t'
     if node == _KEYWORDS['i32']:
       return 'int32_t'
-    if node == _KEYWORDS['u32']:
-      return 'uint32_t'
     if node == _KEYWORDS['i64']:
       return 'int64_t'
+    if node == _KEYWORDS['u8']:
+      return 'uint8_t'
+    if node == _KEYWORDS['u16']:
+      return 'uint16_t'
+    if node == _KEYWORDS['u32']:
+      return 'uint32_t'
     if node == _KEYWORDS['u64']:
       return 'uint64_t'
     if node == _KEYWORDS['bool']:
       return '_Bool'
     if node == _KEYWORDS['void']:
       return 'void'
+    if node == _KEYWORDS['f16']:
+      return '_Float16'  # TODO: __bf16 too?
     if node == _KEYWORDS['f32']:
       return 'float'
+    if node == _KEYWORDS['f64']:
+      return 'double'
     if node == _KEYWORDS['str']:
       return 'struct $Str'
     if isinstance(node, last.PointerDecl):
@@ -1282,6 +1303,13 @@ class Compiler:
           return '%s$__iter__(&%s)' % (self.get_mangled_c_type(arg_type), self.expr(node.args[0]))
         else:
           self.error_at(node.func, 'incorrect number of arguments to "iter"')
+
+      if isinstance(node.func, last.Ident) and node.func.name == 'sizeof':
+        if len(node.args) == 1:
+          arg_type = self.expr_type(self.current_function, node.args[0])
+          return 'sizeof(%s)' % self.get_c_type(arg_type)
+        else:
+          self.error_at(node.func, 'incorrect number of arguments to "sizeof"')
 
       if isinstance(node.func, last.Ident) and node.func.name == 'next':
         if len(node.args) == 1:

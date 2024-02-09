@@ -1,0 +1,29 @@
+// TODO: dyibicc doesn't support _Float16 yet for print(sizeof(f16))
+
+struct MyStruct:
+  int x
+  float y
+  i64 z
+
+def main():
+  print(sizeof(bool), sizeof(byte), sizeof(int), sizeof(float))
+  print(sizeof(u8), sizeof(u16), sizeof(u32), sizeof(u64))
+  print(sizeof(i8), sizeof(i16), sizeof(i32), sizeof(i64))
+  print(sizeof(f32), sizeof(f64))
+  print(sizeof(str))
+
+  x = "stuff!"
+  y = 1234
+  z = MyStruct(0,0,0)
+  print(sizeof(x))
+  print(sizeof(y))
+  print(sizeof(z))
+---
+1 1 4 4
+1 2 4 8
+1 2 4 8
+4 8
+16
+16
+4
+16

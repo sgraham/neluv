@@ -62,9 +62,7 @@ continue_stmt: "continue"
 return_stmt: "return" [testlist]
 import_stmt: import_name | import_from
 import_name: "import" dotted_as_names
-// note below: the ("." | "...") is necessary because "..." is tokenized as ELLIPSIS
-import_from: "from" (dots? dotted_name | dots) "import" ("*" | "(" import_as_names ")" | import_as_names)
-!dots: "."+
+import_from: "from" dotted_name "import" ("*" | "(" import_as_names ")" | import_as_names)
 import_as_name: name ["as" name]
 dotted_as_name: dotted_name ["as" name]
 import_as_names: import_as_name ("," import_as_name)* [","]
