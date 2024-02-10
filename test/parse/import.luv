@@ -6,11 +6,11 @@ from C import malloc
 from C import *
 from C.D import free as bloop
 ---
-TopLevel(body=Block(entries=[Import(package=[ImportPackage(what=['C'],
-                                                           renamed=None)],
+TopLevel(body=Block(entries=[Import(package=ImportPackage(what=['C'],
+                                                          renamed=None),
                                     items=None),
-                             Import(package=[ImportPackage(what=['C'],
-                                                           renamed='blah')],
+                             Import(package=ImportPackage(what=['C'],
+                                                          renamed='blah'),
                                     items=None),
                              ImportFrom(package=ImportPackage(what=['C'],
                                                               renamed=None),

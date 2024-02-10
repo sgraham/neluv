@@ -61,6 +61,11 @@ class TopLevel(AstNode):
   body: Block
 
 @dataclass
+class Package(AstNode):
+  name: str
+  globals: dict[str, AstNode]
+
+@dataclass
 class Type(AstNode):
   # Can be:
   # - an entry in _KEYWORDS (for basic types)
@@ -110,6 +115,9 @@ class FuncDef(AstNode):
     self.symtab = {}  # values are SymTabEntry
     self.upval_bindings = {}  # names are funcname, values are UpvalBindings
     self.nested_funcs_to_push_upvals = []
+
+  def clone(self):
+    return FuncDef(self.rtype, self.name, self.params, self.body, self.hidden)
 
 @dataclass
 class ImportMacros(AstNode):

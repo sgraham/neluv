@@ -1,0 +1,31 @@
+import C
+from C import calloc
+from C import free as woof
+
+def *void malloc(u64 size): external
+
+def main():
+  *int p = C.malloc(8)
+  assert p != null
+  p[0] = 12345678
+  p[1] = 0x22446688
+  print(p[0])
+  print(p[1])
+  woof(p)
+
+  *int p2 = calloc(1, 4)
+  assert p2 != null
+  *p2 = 123
+  print(*p2)
+
+  *int p3 = C.realloc(p2, 8)
+  assert p3 != null
+  p3[1] = 456
+  print(p3[0], p3[1])
+
+  woof(p3)
+---
+12345678
+574908040
+123
+123 456

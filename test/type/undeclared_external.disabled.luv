@@ -1,0 +1,6 @@
+def main():
+  *int x = malloc(44)
+  print(x)
+---
+!
+test/type/undeclared_external.luv:2:12:malloc undefined

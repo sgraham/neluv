@@ -42,6 +42,8 @@ _KEYWORDS['double'] = _KEYWORDS['f64']
 _KEYWORDS['float'] = _KEYWORDS['f32']
 _KEYWORDS['int'] = _KEYWORDS['i32']
 
+_IMPORTS_BY_FILENAME = {}
+
 visit_tag_counter = 0
 tmp_var_counter = 0
 OP_MAP = {
@@ -226,7 +228,7 @@ class ToAst(Transformer):
     return last.ImportItem(children[0], children[1])
 
   def dotted_as_names(self, children):
-    return children
+    return children[0]
 
   def dotted_as_name(self, children):
     return last.ImportPackage(children[0], children[1])
@@ -594,14 +596,18 @@ class Compiler:
       ty = node.type
     self.globals[name] = last.SymTabEntry(ty, node, is_global=True)
 
-  def load_macros(self, fn):
-    glob = {}
-    loc = {}
+  def find_and_read_file_to_load(self, fn):
     fn_to_open = fn
     if not os.path.isfile(fn_to_open):
       fn_to_open = os.path.join(os.path.split(self.filename)[0], fn)
     with open(fn_to_open, 'r') as f:
-      exec(f.read(), glob, loc)
+      return f.read()
+
+  def load_macros(self, fn):
+    source = self.find_and_read_file_to_load(fn)
+    glob = {}
+    loc = {}
+    exec(source, glob, loc)
     for name,func in loc.items():
       if inspect.isfunction(func):
         co_mem = inspect.getmembers(func.__code__)
@@ -612,9 +618,28 @@ class Compiler:
             self.insert_global_or_error(last.MacroDef(name, func))
             break
 
+  def load_package(self, imp_pkg):
+    # TODO: some sort of canonicalization probably
+    assert len(imp_pkg.what) == 1, "todo; affect global names inserted by insert_global_or_error"
+    fn = '.'.join(imp_pkg.what) + '.luv'
+    if x := _IMPORTS_BY_FILENAME.get(fn):
+      return x
+    source = self.find_and_read_file_to_load(fn)
+    tree = self.parser.parse(source + '\n', include_prelude=False)
+    ast = ToAst().transform(tree)
+    sub_compiler = Compiler(fn, ast, self.parser, self.error_callback)
+    '''
+extern void* malloc(size_t s);
+void* $EXTERNAL_malloc(size_t s) { return malloc(s); }
+    '''
+    pkg = last.Package(imp_pkg.what[0], sub_compiler.globals)
+    _IMPORTS_BY_FILENAME[fn] = pkg
+    return pkg
+
   def find_globals(self):
     assert isinstance(self.ast_root, last.TopLevel), self.ast_root
 
+    add_to_toplevel = []
     for tl in self.ast_root.body.entries:
       if (isinstance(tl, last.FuncDef) or
           isinstance(tl, last.VarDecl) or
@@ -632,12 +657,29 @@ class Compiler:
           f.name = '%s$%s' % (tl.name, f.name)
           self.insert_global_or_error(f)
       elif isinstance(tl, last.Import):
-        pprint.pprint(tl)
+        package = self.load_package(tl.package)
+        self.insert_global_or_error(package)
       elif isinstance(tl, last.ImportFrom):
-        pprint.pprint(tl)
+        package = self.load_package(tl.package)
+        # TODO: this only supports function import currently
+        for ii in tl.items:
+          if x := package.globals.get(ii.what):
+            func = x.ref_node
+            if ii.renamed:
+              copy = func.clone()
+              copy.name = ii.renamed
+              args = [last.Ident(p.name) for p in func.params]
+              copy.body = last.Block([last.Return(last.FuncCall(last.Ident(ii.what), args))])
+              copy.hidden = True
+              add_to_toplevel.append(copy)
+              self.insert_global_or_error(copy)
+          else:
+            self.error_at(ii, '%s not found in %s' % (ii.what, package.name))
       else:
-        pprint.pprint(tl)
+        #pprint.pprint(tl)
         self.error_at(tl, 'unexpected at top level %s' % tl)
+
+    self.ast_root.body.entries.extend(add_to_toplevel)
 
     for i, tl in enumerate(self.ast_root.body.entries):
       if isinstance(tl, last.Assign) and isinstance(tl.lhs, last.Ident):
@@ -1091,6 +1133,8 @@ class Compiler:
       return _KEYWORDS['str']
     elif isinstance(expr, last.Fstring):
       return _KEYWORDS['str']
+    elif isinstance(expr, last.Package):
+      return expr
     elif isinstance(expr, last.FuncCall):
       if isinstance(expr.func, last.Ident):
         if expr.func.name == 'iter':
@@ -1186,7 +1230,10 @@ class Compiler:
       assert isinstance(obj, last.Type)
       while isinstance(obj, last.PointerDecl):
         obj = obj.base
-      return obj.base
+      if isinstance(obj, last.ListType) or isinstance(obj, last.ListDecl):
+        return obj.base
+      else:
+        return obj
     elif isinstance(expr, last.Tuple):
       return self.tuple_struct_for_values(funcdef, expr.items).cached_type()
     elif isinstance(expr, last.Type):
@@ -1295,6 +1342,10 @@ class Compiler:
       if ste and ste.is_upval:
         return '*$up->%s' % self.get_safe_c_name(node.name)
       else:
+        #if not ste:
+          #ste = self.globals.get(node.name)
+        #if not ste:
+          #self.error_at(node, '%s undefined' % node.name)
         return self.get_safe_c_name(node.name)
     elif isinstance(node, last.Number):
       if isinstance(node.value, int):
@@ -1367,10 +1418,23 @@ class Compiler:
       self_inject = []
       if isinstance(node.func, last.GetAttr):
         lhs_type = self.expr_type(self.current_function, node.func.lhs)
-        result_type = self.result_type_of_method(lhs_type, node.func.rhs, errnode=node.func)
-        # TODO: need lval context to self.expr
-        self_inject.append(last.Ident('&' + self.expr(node.func.lhs)))
-        result = self.method_name(lhs_type, node.func.rhs)
+        if lhs_type is None and isinstance(node.func.lhs, last.Ident):
+          # Package.
+          global_sym = self.globals.get(node.func.lhs.name)
+          assert global_sym
+          package = global_sym.ref_node
+          assert isinstance(package, last.Package)
+          result = ''
+          if x := package.globals.get(node.func.rhs):
+            result = self.expr(last.Ident(node.func.rhs))
+          else:
+            self.error_at('%s not found in %s' % (node.func.rhs, package.name))
+        else:
+          # Pseudo member function.
+          result_type = self.result_type_of_method(lhs_type, node.func.rhs, errnode=node.func)
+          # TODO: need lval context to self.expr
+          self_inject.append(last.Ident('&' + self.expr(node.func.lhs)))
+          result = self.method_name(lhs_type, node.func.rhs)
       else:
         result = self.expr(node.func)
 
@@ -1614,12 +1678,9 @@ class Compiler:
     elif isinstance(node, last.FuncDef):
       return '/* HOISTED %s */;' % node.name
     elif isinstance(node, last.Import):
-      # somethign like make GetAttr also understand a package structure (which
-      # can be compile time only?) as well as adding aliases to globals that
-      # allow for renames for from imports.
-      return '/* TODO: import! */'
+      return '/* TODO: import in body */'
     elif isinstance(node, last.ImportFrom):
-      return '/* TODO: from import! */'
+      return '/* TODO: from import in body */'
     else:
       return self.expr(node) + ';'
 
@@ -1778,6 +1839,8 @@ void $Str$__del__(struct $Str* self) {
 #define int32_t$__imul__(a, b) ((*a)*=(b))
 #define int32_t$__idiv__(a, b) ((*a)/=(b))
 
+#define int32_t$__getitem__(a, b) (a[b])
+
 static void printint(int x) {
   printf("%d", x);
 }
@@ -1831,6 +1894,14 @@ static void printnl(void) {
         if isinstance(obj, last.FuncDef):
           f.write(self.function_forward_declaration(obj))
           f.write(';\n')
+        elif isinstance(obj, last.Package):
+          for name,item_ste in obj.globals.items():
+            item = item_ste.ref_node
+            # TODO: more than just extern functions
+            if (isinstance(item, last.FuncDef) and len(item.body.entries) == 1 and
+                isinstance(item.body.entries[0], last.External)):
+              f.write(self.function_forward_declaration(item))
+              f.write(';\n')
 
       if self.have_error: return
 
@@ -1963,7 +2034,7 @@ def do_tests(parser, test_list, update):
     err = (node, msg)
 
   for t in test_list:
-    #print(t)
+    print(t)
     if '.disabled.' in t:
       disabled_list.append(t)
       continue
@@ -1972,9 +2043,9 @@ def do_tests(parser, test_list, update):
     is_parse = t.startswith('test/parse')
     is_type = t.startswith('test/type')
     tree = parser.parse(source, include_prelude=not is_parse and not is_type)
-    print(tree.pretty())
+    #print(tree.pretty())
     ast = ToAst().transform(tree)
-    pprint.pprint(ast)
+    #pprint.pprint(ast)
     if is_parse:
       got = pprint.pformat(ast)
     elif is_type:
@@ -2028,21 +2099,12 @@ def main():
     print(tree.pretty(), file=sys.stderr)
 
     ast = ToAst().transform(tree)
-    import pprint
     pprint.pprint(ast, stream=sys.stderr)
     c = Compiler(sys.argv[1], ast, parser)
     c_file = os.path.splitext(sys.argv[1])[0] + '.c'
     c.compile(c_file)
     dyibicc(c_file)
 
-    '''
-    class MacroContext:
-      def __init__(self):
-        self.arguments = ['a', 'b', 'c']
-    ctx = MacroContext()
-    for x in Macro_printx(ctx):
-      print('yielded', x)
-    '''
 
 if __name__ == '__main__':
   main()

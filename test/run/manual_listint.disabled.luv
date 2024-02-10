@@ -1,0 +1,63 @@
+import C
+
+struct MyListInt:
+  *int ptr
+  int len
+  int cap
+
+struct MyListIntIter:
+  *MyListInt seq
+  int cur
+
+
+on MyListInt def __getitem__(self, int at):
+  assert at >= 0 and at < self.len
+  return self.ptr[at]
+
+on MyListInt def __iter__(self):
+  return MyListIntIter(self, 0)
+
+on MyListInt def __del__(self):
+  C.free(self.ptr)
+  self.ptr = C.NULL
+  self.len = 0
+  self.cap = 0
+
+on MyListInt def reserve(self, int cap):
+  if self.cap < cap:
+    *int newp = C.malloc(C.sizeof(int) * cap)
+    C.memcpy(newp, self.ptr, C.sizeof(int) * self.len)
+    C.free(self.ptr)
+    self.ptr = newp
+    self.cap = cap
+
+on MyListInt def append(self, int value):
+  self.reserve(16 if self.cap < 16 else self.cap * 2)
+  self.ptr[self.len] = value
+  self.len += 1
+
+
+on MyListIntIter def __next__(self):
+  if self.cur >= self.seq.len:
+    return false, 0
+  ret = self.seq.ptr[self.cur]
+  self.cur += 1
+  return true, ret
+
+
+def main():
+  L = MyListInt()
+  L.append(5)
+  L.append(4)
+  L.append(3)
+  L.append(2)
+  L.append(1)
+  for i in L:
+    print(i)
+
+---
+5
+4
+3
+2
+1

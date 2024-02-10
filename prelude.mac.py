@@ -65,8 +65,6 @@ def print(macro):
     result = []
     for i,a in __builtins__['enumerate'](macro.args):
         ty = macro.expr_type(a)
-        __builtins__['print'](ty)
-        __builtins__['print'](ty is macro.keywords['i32'])
         if ty is macro.keywords['i32']:
             result.append(last.FuncCall(last.Ident('printint'), [a]))
         elif ty is macro.keywords['bool']:
