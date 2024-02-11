@@ -21,6 +21,12 @@ on RangeIter def __next__(self):
   self.cur += self.obj.step
   return true, ret
 
+def void printint(int i): external
+def void printbool(bool b): external
+def void printstr(str s): external
+def void printspace(): external
+def void printnl(): external
+
 import_macros "prelude.mac.py"
 
 // TODO: implement here with macros:

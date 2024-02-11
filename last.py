@@ -32,6 +32,9 @@ class FuncCall(AstNode):
 class Ident(AstNode):
   name: str
 
+  def __post_init__(self):
+    self.special = False
+
 @dataclass
 class Op(AstNode):
   name: str
@@ -112,9 +115,32 @@ class FuncDef(AstNode):
   hidden: bool = False
 
   def __post_init__(self):
-    self.symtab = {}  # values are SymTabEntry
+    self.symtabs = []  # stack of dicts, where keys are names and values are SymTabEntry
     self.upval_bindings = {}  # names are funcname, values are UpvalBindings
     self.nested_funcs_to_push_upvals = []
+
+  def push_empty_symtab_scope(self):
+    self.symtabs.append({})
+
+  def pop_symtab_scope(self):
+    self.symtabs.pop()
+
+  def add_to_symtab(self, name, ste):
+    #print('ADDING', name, 'to', self.name)
+    assert name not in self.symtabs[-1]
+    self.symtabs[-1][name] = ste
+
+  def replace_in_symtab(self, name, ste):
+    #print('REPLACING', name, 'in', self.name)
+    assert name in self.symtabs[-1]
+    self.symtabs[-1][name] = ste
+
+  def find_in_symtab(self, name):
+    #print('FINDING', name, 'in', self.name)
+    for symtab in reversed(self.symtabs):
+      x = symtab.get(name)
+      if x: return x
+    return None
 
   def clone(self):
     return FuncDef(self.rtype, self.name, self.params, self.body, self.hidden)

@@ -482,17 +482,19 @@ class Compiler:
       self.parent = parent
       for p in func.params:
         assert isinstance(p, last.TypedVar)
-        func.symtab[p.name] = last.SymTabEntry(p.type, p, is_func_param=True)
+        func.add_to_symtab(p.name, last.SymTabEntry(p.type, p, is_func_param=True))
 
     def visit_VarDecl(self, node):
-      x = self.func.symtab.get(node.name)
+      x = self.func.find_in_symtab(node.name)
       if x:
         if x.is_pending_nonlocal and self.parent.is_lexically_before(node, x.ref_node):
           self.parent.error_at(node, 'name "%s" is used before nonlocal declaration' % node.name)
         else:
           self.parent.error_at(node,
               'redefinition of "%s" in "%s"' % (node.name, self.func.name))
-      self.func.symtab[node.name] = last.SymTabEntry(node.type, node, is_declared_local=True)
+        return
+      self.func.add_to_symtab(node.name,
+                              last.SymTabEntry(node.type, node, is_declared_local=True))
 
     def visit_For(self, node):
       if isinstance(node.it, list):
@@ -503,10 +505,10 @@ class Compiler:
         self.local(node.it)
 
     def local(self, ident):
-      x = self.func.symtab.get(ident.name)
+      x = self.func.find_in_symtab(ident.name)
       if not x:
-        self.func.symtab[ident.name] = last.SymTabEntry(
-            _KEYWORDS['auto'], ident, is_declared_local=True)
+        self.func.add_to_symtab(ident.name, last.SymTabEntry(
+          _KEYWORDS['auto'], ident, is_declared_local=True))
       elif x.is_pending_nonlocal and self.parent.is_lexically_before(ident, x.ref_node):
         self.parent.error_at(ident, 'name "%s" is used before nonlocal declaration' % ident.name)
 
@@ -530,10 +532,11 @@ class Compiler:
       self.parent = parent
     def visit_Nonlocal(self, node):
       for name in node.vars:
-        self.func.symtab[name] = last.SymTabEntry(None, node, is_pending_nonlocal=True)
+        self.func.add_to_symtab(name, last.SymTabEntry(None, node, is_pending_nonlocal=True))
 
   def build_function_symtabs(self):
     for f in self.find_func_defs(self.ast_root):
+      f.push_empty_symtab_scope()
       self.Visit(self.ScanForNonlocal(f, self), f.body, do_not_cross_types=[last.FuncDef])
       self.Visit(self.FuncSymTab(f, self), f.body, do_not_cross_types=[last.FuncDef])
 
@@ -628,10 +631,6 @@ class Compiler:
     tree = self.parser.parse(source + '\n', include_prelude=False)
     ast = ToAst().transform(tree)
     sub_compiler = Compiler(fn, ast, self.parser, self.error_callback)
-    '''
-extern void* malloc(size_t s);
-void* $EXTERNAL_malloc(size_t s) { return malloc(s); }
-    '''
     pkg = last.Package(imp_pkg.what[0], sub_compiler.globals)
     _IMPORTS_BY_FILENAME[fn] = pkg
     return pkg
@@ -669,10 +668,14 @@ void* $EXTERNAL_malloc(size_t s) { return malloc(s); }
               copy = func.clone()
               copy.name = ii.renamed
               args = [last.Ident(p.name) for p in func.params]
-              copy.body = last.Block([last.Return(last.FuncCall(last.Ident(ii.what), args))])
+              internal_name = last.Ident(ii.what)
+              internal_name.special = True
+              copy.body = last.Block([last.Return(last.FuncCall(internal_name, args))])
               copy.hidden = True
               add_to_toplevel.append(copy)
               self.insert_global_or_error(copy)
+            else:
+              self.insert_global_or_error(func)
           else:
             self.error_at(ii, '%s not found in %s' % (ii.what, package.name))
       else:
@@ -774,7 +777,7 @@ void* $EXTERNAL_malloc(size_t s) { return malloc(s); }
       pending_non_local = None
       pending_non_local_name = None
       for f in reversed(lexical_func_stack):
-        in_upper = f.symtab.get(i)
+        in_upper = f.find_in_symtab(i)
         if in_upper and in_upper.is_pending_nonlocal:
           # If it was found, but it's marked as nonlocal, then we need to search
           # higher, so note that we are searching for it and continue (so that
@@ -787,7 +790,10 @@ void* $EXTERNAL_malloc(size_t s) { return malloc(s); }
             #print('upval req for %s of %s, found in %s' % (i, func.name, f.name))
             ste = last.SymTabEntry(
                 in_upper.type, in_upper.ref_node, is_upval=True, func_ref_if_upval=f)
-            func.symtab[i] = ste
+            if pending_non_local:
+              func.replace_in_symtab(i, ste)
+            else:
+              func.add_to_symtab(i, ste)
             to_bind[i] = ste
             pending_non_local = pending_non_local_name = None
             break
@@ -838,8 +844,8 @@ void* $EXTERNAL_malloc(size_t s) { return malloc(s); }
           # something to deal with a local declared with the same name as a
           # function.
           self.parent.replace_ident_references(cur.body, old_name, new_name)
-          cur.symtab[new_name] = last.SymTabEntry(
-              _KEYWORDS['auto'], nested, is_declared_local=True, is_hoisted_function=True)
+          cur.add_to_symtab(new_name, last.SymTabEntry(
+              _KEYWORDS['auto'], nested, is_declared_local=True, is_hoisted_function=True))
           #pprint.pprint(cur_func)
 
         self.cur_func_stack.append(nested)
@@ -892,7 +898,7 @@ void* $EXTERNAL_malloc(size_t s) { return malloc(s); }
         assert isinstance(rhs_type.base, last.Struct), str(rhs_type.base)
         rhs_type = rhs_type.base
         rhs_type = rhs_type.members[tuple_index].type
-      x = self.parent.current_function.symtab.get(ident.name)
+      x = self.parent.current_function.find_in_symtab(ident.name)
       assert x, "ident not in scope? '%s'" % ident.name
       if x.type is _KEYWORDS['auto']:
         x.type = rhs_type
@@ -1027,7 +1033,7 @@ void* $EXTERNAL_malloc(size_t s) { return malloc(s); }
           if ste:
             assert ste.is_upval and ste.func_ref_if_upval
             if ste.type is _KEYWORDS['auto']:
-              ste.type = ste.func_ref_if_upval.symtab[ident.name].type
+              ste.type = ste.func_ref_if_upval.find_in_symtab(ident.name).type
 
               # And also the members of the upval structure
               # (|y| in test/run/nested_func_ref_up_double.luv).
@@ -1192,7 +1198,7 @@ void* $EXTERNAL_malloc(size_t s) { return malloc(s); }
       else:
         assert False, "unhandled unary op %s" % expr.op
     elif isinstance(expr, last.Ident):
-      if ste := funcdef.symtab.get(expr.name):
+      if ste := funcdef.find_in_symtab(expr.name):
         return ste.type
       if ste := self.globals.get(expr.name):
         return ste.type
@@ -1338,14 +1344,15 @@ void* $EXTERNAL_malloc(size_t s) { return malloc(s); }
 
   def expr(self, node):
     if isinstance(node, last.Ident):
-      ste = self.current_function.symtab.get(node.name) if self.current_function else None
-      if ste and ste.is_upval:
-        return '*$up->%s' % self.get_safe_c_name(node.name)
+      ste = self.current_function.find_in_symtab(node.name) if self.current_function else None
+      if ste:
+        if ste.is_upval:
+          return '*$up->%s' % self.get_safe_c_name(node.name)
+        return self.get_safe_c_name(node.name)
       else:
-        #if not ste:
-          #ste = self.globals.get(node.name)
-        #if not ste:
-          #self.error_at(node, '%s undefined' % node.name)
+        # "special" means just emit the ident literally, even if undefined.
+        if not self.globals.get(node.name) and not node.special:
+          self.error_at(node, '%s undefined' % node.name)
         return self.get_safe_c_name(node.name)
     elif isinstance(node, last.Number):
       if isinstance(node.value, int):
@@ -1426,14 +1433,16 @@ void* $EXTERNAL_malloc(size_t s) { return malloc(s); }
           assert isinstance(package, last.Package)
           result = ''
           if x := package.globals.get(node.func.rhs):
-            result = self.expr(last.Ident(node.func.rhs))
+            ident = last.Ident(node.func.rhs)
+            ident.special = True
+            result = self.expr(ident)
           else:
             self.error_at('%s not found in %s' % (node.func.rhs, package.name))
         else:
           # Pseudo member function.
           result_type = self.result_type_of_method(lhs_type, node.func.rhs, errnode=node.func)
           # TODO: need lval context to self.expr
-          self_inject.append(last.Ident('&' + self.expr(node.func.lhs)))
+          self_inject.append(last.UnaryExpr(last.Op('&'), node.func.lhs))
           result = self.method_name(lhs_type, node.func.rhs)
       else:
         result = self.expr(node.func)
@@ -1446,8 +1455,12 @@ void* $EXTERNAL_malloc(size_t s) { return malloc(s); }
           # TODO: this is obviously suck
           has_uv = self.current_function.upval_bindings.get(node.func.name)
           if has_uv:
-            # TODO: double hacky, sneaky & here.
-            upvals.append(last.Ident('&' + has_uv.parent_binding_name))
+            # We don't want to put $uv0, etc. into local function scope, so hack
+            # with special=True to tell the lookup mechanism to emit it
+            # literally even though it's undefined.
+            uv_binding_local_name = last.Ident(has_uv.parent_binding_name)
+            uv_binding_local_name.special = True
+            upvals.append(last.UnaryExpr(last.Op('&'), uv_binding_local_name))
 
       result += ','.join(self.expr(x) for x in (upvals + self_inject + node.args))
       result += ')'
@@ -1483,6 +1496,11 @@ void* $EXTERNAL_malloc(size_t s) { return malloc(s); }
         assert iter_return_type.base.members[1].name == '_1'
         iter_value_type = iter_return_type.base.members[1].type
         iter_value_c_type = self.get_c_type(iter_value_type)
+
+        self.current_function.push_empty_symtab_scope()
+        self.current_function.add_to_symtab(it_name, last.SymTabEntry(iter_value_type,
+          f.its, is_declared_local=True))
+
         result += '%s %s = {0};' % (iter_return_c_type, it_ret_tmp)
         result += 'for(;;) {'
         result += '%s = %s$__next__(&%s);' % (
@@ -1493,6 +1511,8 @@ void* $EXTERNAL_malloc(size_t s) { return malloc(s); }
         result += '%s$append(&%s, %s);' % (
             result_mangled_c_type, result_tmp, self.expr(node.body.result))
         result += '}'
+
+        self.current_function.pop_symtab_scope()
 
       result += result_tmp + ';'
       result += '})'
@@ -1522,8 +1542,8 @@ void* $EXTERNAL_malloc(size_t s) { return malloc(s); }
         c_type = self.get_c_type(l_type)
         tmp = get_tmp_var()
         tmp_ident = last.Ident(tmp)
-        self.current_function.symtab[tmp] = last.SymTabEntry(
-            l_type, cur_op, is_compiler_temporary=True)
+        self.current_function.add_to_symtab(tmp, last.SymTabEntry(
+            l_type, cur_op, is_compiler_temporary=True))
         mangled_c_type = self.get_mangled_c_type(l_type)
         result += '%s %s = %s$%s(%s, %s);' % (
             c_type, tmp, mangled_c_type, OP_MAP[cur_op.name], self.expr(cur_l), self.expr(cur_r))
@@ -1708,7 +1728,10 @@ void* $EXTERNAL_malloc(size_t s) { return malloc(s); }
     result = self.function_forward_declaration(func)
     self.current_function = func
     result += '{'
-    for n, ste in func.symtab.items():
+    # There can be more than one in the body of list comprehensions, but not
+    # here at the beginning of a function body.
+    assert len(func.symtabs) == 1
+    for n, ste in func.symtabs[0].items():
       if ste.is_declared_local and not ste.is_hoisted_function:
         if ste.type is _KEYWORDS['void']:
           self.error_at(ste.ref_node, 'can\'t declare local of type "%s"' % ste.type.base)
@@ -1717,7 +1740,7 @@ void* $EXTERNAL_malloc(size_t s) { return malloc(s); }
     for n, upval in func.upval_bindings.items():
       result += 'struct %s %s = {' % (upval.struct_name, upval.parent_binding_name)
       for name, uv in upval.to_bind.items():
-        in_cur_func = func.symtab[name]
+        in_cur_func = func.symtabs[0][name]
         # If the source of this variable is already an upval (i.e. we're in the
         # "middle" function whose child references the variable, but it's
         # declared in our parent, then we need to pass it on from our upvals,
@@ -2034,7 +2057,7 @@ def do_tests(parser, test_list, update):
     err = (node, msg)
 
   for t in test_list:
-    print(t)
+    #print(t)
     if '.disabled.' in t:
       disabled_list.append(t)
       continue

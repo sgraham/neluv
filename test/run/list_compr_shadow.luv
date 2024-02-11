@@ -1,0 +1,17 @@
+def fib(int n):
+  if n <= 1:
+    return n
+  return fib(n-1) + fib(n-2)
+
+def main():
+  i = 3
+  print(i)
+  L = [fib(i) for i in range(7)]
+  print(i)
+  print(L[0])
+  print(L[6])
+---
+3
+3
+0
+8
