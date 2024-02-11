@@ -36,6 +36,7 @@ syn keyword     luvKeyword       sizeof
 syn keyword     luvKeyword       struct
 syn keyword     luvKeyword       true
 syn keyword     luvKeyword       union
+syn keyword     luvKeyword       while
 syn keyword     luvKeyword       with
 hi def link     luvKeyword       Keyword
 

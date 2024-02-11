@@ -27,6 +27,10 @@ _KEYWORDS = {
   'u8': last.Type('u8'),
   'void': last.Type('void'),
 
+  # This is a hack to forward decl memcpy, etc. that are semi-builtin and
+  # require matching prototypes.
+  'cvoid': last.Type('cvoid'),
+
   'float': last.Type('f32'),
   'double': last.Type('f64'),
 
@@ -265,6 +269,9 @@ class ToAst(Transformer):
 
   def for_stmt(self, children):
     return last.For(children[0], children[1], children[2], children[3])
+
+  def while_stmt(self, children):
+    return last.While(children[0], children[1], children[2])
 
   def if_stmt(self, children):
     return last.If(children[0], children[1], children[2], children[3])
@@ -728,7 +735,8 @@ class Compiler:
           if isinstance(p.type, last.Ident):
             resolved = self.globals.get(p.type.name)
             if resolved.ref_node and isinstance(resolved.ref_node, last.Struct):
-              p.type = resolved.ref_node.cached_type()
+              # TODO: Type vs. Struct sucks
+              p.type = last.Type(resolved.ref_node.cached_type())
           elif isinstance(p.type, last.PointerDecl):
             t = p.type
             prev = None
@@ -1302,6 +1310,8 @@ class Compiler:
       return '_Bool'
     if node == _KEYWORDS['void']:
       return 'void'
+    if node == _KEYWORDS['cvoid']:
+      return 'const void'
     if node == _KEYWORDS['f16']:
       return '_Float16'  # TODO: __bf16 too?
     if node == _KEYWORDS['f32']:
@@ -1440,9 +1450,29 @@ class Compiler:
             self.error_at('%s not found in %s' % (node.func.rhs, package.name))
         else:
           # Pseudo member function.
+          # LHS might be a ****Struct, or *Struct, or Struct, so first find the
+          # underlying Struct type.
+          lhs = node.func.lhs
+          while True:
+            # TODO: this is dumb, PointerDecl is a Type with a base of Struct,
+            # but Structs are Types with a base of Struct. I think Struct should
+            # just be a Type. (i.e. can't first test for "is Type and base is
+            # Struct", because then it'll break on a pointer to the struct.)
+            if lhs_type.__class__ is last.Type and isinstance(lhs_type.base, last.Struct):
+              break
+            if isinstance(lhs_type, last.PointerDecl):
+              lhs_type = lhs_type.base
+              # XXX Type vs Struct
+              if isinstance(lhs_type, last.Struct):
+                lhs_type = last.Type(lhs_type)
+              lhs = last.UnaryExpr(last.Op('*'), lhs)
+          else:
+            self.error_at('%s not callable on %s' % (node.func.rhs, node.func.lhs))
+            return ''
+
           result_type = self.result_type_of_method(lhs_type, node.func.rhs, errnode=node.func)
-          # TODO: need lval context to self.expr
-          self_inject.append(last.UnaryExpr(last.Op('&'), node.func.lhs))
+          single_ptr_to = last.UnaryExpr(last.Op('&'), lhs)
+          self_inject.append(single_ptr_to)
           result = self.method_name(lhs_type, node.func.rhs)
       else:
         result = self.expr(node.func)
@@ -1623,6 +1653,12 @@ class Compiler:
       result += '%s = %s$__next__(&%s);' % (it_ret_tmp, iter_mangled_c_type, iter_tmp)
       result += 'if (!(%s._0)) break;' % it_ret_tmp
       result += '%s %s = %s._1;' % (iter_value_c_type, it_name, it_ret_tmp)
+      result += self.stmt(node.body)
+      result += '}'
+      return result
+    elif isinstance(node, last.While):
+      assert node.els is None, 'todo'
+      result = 'while(%s){' % self.expr(node.cond)
       result += self.stmt(node.body)
       result += '}'
       return result
@@ -1822,10 +1858,13 @@ class Compiler:
   def compile(self, outfn):
     with open(outfn, 'w', newline='\n') as f:
       f.write(r'''#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <assert.h>
+
+void* malloc(size_t);
+void free(void*);
+void* memcpy(void*, const void*, uint64_t);
+int printf(const char *, ...);
+
 struct $Str {
   char* ptr;
   int64_t len;

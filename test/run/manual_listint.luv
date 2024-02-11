@@ -19,20 +19,24 @@ on MyListInt def __iter__(self):
 
 on MyListInt def __del__(self):
   C.free(self.ptr)
-  self.ptr = C.NULL
+  self.ptr = null
   self.len = 0
   self.cap = 0
 
 on MyListInt def reserve(self, int cap):
   if self.cap < cap:
-    *int newp = C.malloc(C.sizeof(int) * cap)
-    C.memcpy(newp, self.ptr, C.sizeof(int) * self.len)
+    newcap = cap
+    if newcap < 16: newcap = 16
+    while newcap < cap:
+      newcap *= 2
+    *int newp = C.malloc(sizeof(int) * newcap)
+    C.memcpy(newp, self.ptr, sizeof(int) * self.len)
     C.free(self.ptr)
     self.ptr = newp
-    self.cap = cap
+    self.cap = newcap
 
 on MyListInt def append(self, int value):
-  self.reserve(16 if self.cap < 16 else self.cap * 2)
+  self.reserve(self.len + 1)
   self.ptr[self.len] = value
   self.len += 1
 
@@ -46,7 +50,7 @@ on MyListIntIter def __next__(self):
 
 
 def main():
-  L = MyListInt()
+  L = MyListInt(null,0,0)
   L.append(5)
   L.append(4)
   L.append(3)
@@ -54,6 +58,7 @@ def main():
   L.append(1)
   for i in L:
     print(i)
+  del L
 
 ---
 5

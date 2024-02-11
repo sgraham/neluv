@@ -1,0 +1,27 @@
+struct Thing:
+  int x
+
+on Thing def blah(self):
+  self.boop()
+
+on Thing def boop(self):
+  print("boop", self.x)
+
+def main():
+  print("create thing")
+  t = Thing(44)
+  t.blah()
+  print("done blah")
+
+  pt = &t
+  ppt = &pt
+  pppt = &ppt
+  t.x = 55
+  pppt.blah()
+  print("done ppp blah")
+---
+create thing
+boop 44
+done blah
+boop 55
+done ppp blah

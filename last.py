@@ -241,6 +241,12 @@ class For(AstNode):
   els: Block
 
 @dataclass
+class While(AstNode):
+  cond: AstNode
+  body: Block
+  els: Block
+
+@dataclass
 class Elif(AstNode):
   cond: AstNode
   body: Block

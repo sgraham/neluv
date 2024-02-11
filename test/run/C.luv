@@ -3,4 +3,6 @@ def *void calloc(u64 num, u64 size): external
 def *void realloc(*void ptr, u64 new_size): external
 def void free(*void ptr): external
 
+def *void memcpy(*void destination, *cvoid source, u64 num): external
+
 def main(): pass
