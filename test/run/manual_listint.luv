@@ -60,9 +60,17 @@ def main():
     print(i)
   del L
 
+  MyListInt M
+  M.append(44)
+  M.append(55)
+  for i in M:
+    print(i)
+  del M
 ---
 5
 4
 3
 2
 1
+44
+55

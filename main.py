@@ -500,6 +500,19 @@ class Compiler:
           self.parent.error_at(node,
               'redefinition of "%s" in "%s"' % (node.name, self.func.name))
         return
+
+      # TODO: This is probably in the wrong place. resolve_type_names makes more
+      # sense, but has no symtabs yet.
+      if isinstance(node.type, last.Ident):
+        ste = self.func.find_in_symtab(node.type.name)
+        if not ste:
+          ste = self.parent.globals.get(node.type.name)
+        if not ste:
+          self.error_at(node, "%s undefined" % node.type.name)
+        # TODO: Type vs Struct
+        assert isinstance(ste.ref_node, last.Struct)
+        node.type = last.Type(ste.ref_node)
+
       self.func.add_to_symtab(node.name,
                               last.SymTabEntry(node.type, node, is_declared_local=True))
 
