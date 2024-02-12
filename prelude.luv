@@ -21,6 +21,13 @@ on RangeIter def __next__(self):
   self.cur += self.obj.step
   return true, ret
 
+// It would be nice to implement `str` here mostly, but trying got a bit messy.
+// - the parser turns `str` into a Type rather than a Struct
+// - there's ordering problems in the generated code
+// - pointer arithmetic isn't implemented yet
+// - the compiler is messy wrt to treating $Str as a value/ptr and that makes
+// member funcs not right for str (this is probably just a general bug).
+
 def void printint(int i): external
 def void printbool(bool b): external
 def void printstr(str s): external
