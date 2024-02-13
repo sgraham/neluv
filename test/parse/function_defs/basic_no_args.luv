@@ -3,7 +3,7 @@ def *byte stuff():
   return "stuff"
 ---
 TopLevel(body=Block(entries=[FuncDef(rtype=PointerDecl(base=Type(base='u8')),
-                                     name='stuff',
+                                     name=Ident(name='stuff'),
                                      params=[],
                                      body=Block(entries=[Return(value=String(value='stuff'))]),
                                      hidden=False)]))

@@ -4,7 +4,7 @@ union Thing:
   float z
   u32 w
 ---
-TopLevel(body=Block(entries=[Union(name='Thing',
+TopLevel(body=Block(entries=[Union(name=Ident(name='Thing'),
                                    members=[TypedVar(type=Type(base='i32'),
                                                      name='x'),
                                             TypedVar(type=Type(base='bool'),

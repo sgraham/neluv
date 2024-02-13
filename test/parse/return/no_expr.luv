@@ -2,7 +2,7 @@ def func():
   return
 ---
 TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
-                                     name='func',
+                                     name=Ident(name='func'),
                                      params=[],
                                      body=Block(entries=[Return(value=None)]),
                                      hidden=False)]))

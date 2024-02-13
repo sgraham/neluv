@@ -36,6 +36,17 @@ class Ident(AstNode):
     self.special = False
 
 @dataclass
+class TIdent(AstNode):
+  name: str
+
+  def __post_init__(self):
+    self.special = False
+
+@dataclass
+class JoinIdents(AstNode):
+  idents: list[AstNode]  # Must be Idents or TIdents
+
+@dataclass
 class Op(AstNode):
   name: str
 
@@ -99,7 +110,7 @@ class UpvalBindings:  # Not AstNode
     self.to_bind = to_bind  # map of ident to ste's to bind
     self.struct_name = '$Upvals$' + func_name
     mems = [TypedVar(ste.type, n) for n,ste in to_bind.items()]
-    self.struct = Struct(self.struct_name, mems)
+    self.struct = Struct(Ident(self.struct_name), mems)
     global upval_binding_counter
     self.parent_binding_name = '$uv' + str(upval_binding_counter)
     upval_binding_counter += 1
@@ -148,6 +159,11 @@ class FuncDef(AstNode):
 @dataclass
 class ImportMacros(AstNode):
   filename: str
+
+@dataclass
+class Quote(AstNode):
+  name: str
+  body: Block
 
 @dataclass
 class ImportPackage(AstNode):

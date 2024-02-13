@@ -31,6 +31,7 @@ syn keyword     luvKeyword       null
 syn keyword     luvKeyword       on
 syn keyword     luvKeyword       or
 syn keyword     luvKeyword       pass
+syn keyword     luvKeyword       quote
 syn keyword     luvKeyword       return
 syn keyword     luvKeyword       sizeof
 syn keyword     luvKeyword       struct
@@ -51,7 +52,7 @@ hi def link     luvType Type
 syn keyword     luvBuiltin range iter next stack heap enumerate print
 hi def link     luvBuiltin Function
 
-syn keyword     luvMacroHelper parse insert_global have_global args block
+syn keyword     luvMacroHelper parse_expr parse_toplevel insert_global have_global args
 hi def link     luvMacroHelper PreProc
 
 syn region	luvPreProc	start="^\s*\zs\%(%:\|#\)" skip="\\$" end="$" keepend contains=ALLBUT,@Spell

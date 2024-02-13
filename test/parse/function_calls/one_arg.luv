@@ -2,7 +2,7 @@ def f():
   malloc(42)
 ---
 TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
-                                     name='f',
+                                     name=Ident(name='f'),
                                      params=[],
                                      body=Block(entries=[FuncCall(func=Ident(name='malloc'),
                                                                   args=[Number(value=42)])]),

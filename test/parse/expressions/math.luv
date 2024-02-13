@@ -2,7 +2,7 @@ def f():
   int x = 1 + 2
 ---
 TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
-                                     name='f',
+                                     name=Ident(name='f'),
                                      params=[],
                                      body=Block(entries=[VarDecl(type=Type(base='i32'),
                                                                  name='x',

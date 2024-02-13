@@ -2,7 +2,7 @@ def f():
   a.b()
 ---
 TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
-                                     name='f',
+                                     name=Ident(name='f'),
                                      params=[],
                                      body=Block(entries=[FuncCall(func=GetAttr(lhs=Ident(name='a'),
                                                                                rhs='b'),

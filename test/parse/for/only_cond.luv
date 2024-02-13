@@ -3,7 +3,7 @@ def func():
     print("hi")
 ---
 TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
-                                     name='func',
+                                     name=Ident(name='func'),
                                      params=[],
                                      body=Block(entries=[For(it=None,
                                                              collection=Const(name='true'),

@@ -3,7 +3,7 @@ def main():
   M = [a for a in L]
 ---
 TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
-                                     name='main',
+                                     name=Ident(name='main'),
                                      params=[],
                                      body=Block(entries=[Assign(lhs=Ident(name='L'),
                                                                 rhs=List(values=[Number(value=1),

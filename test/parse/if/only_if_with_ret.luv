@@ -4,7 +4,7 @@ def int stuff(int a, int b):
   return b
 ---
 TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='i32'),
-                                     name='stuff',
+                                     name=Ident(name='stuff'),
                                      params=[TypedVar(type=Type(base='i32'),
                                                       name='a'),
                                              TypedVar(type=Type(base='i32'),

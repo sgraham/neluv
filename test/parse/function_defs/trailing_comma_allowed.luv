@@ -2,7 +2,7 @@ def func(bool x,):
   pass
 ---
 TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
-                                     name='func',
+                                     name=Ident(name='func'),
                                      params=[TypedVar(type=Type(base='bool'),
                                                       name='x')],
                                      body=Block(entries=[Pass()]),

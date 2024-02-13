@@ -3,8 +3,8 @@
 
 start: (_NEWLINE | stmt)*
 
-methoddef: "on" name "def" [returntype] name "(" name ["," parameters] ")" ":" suite
-funcdef: "def" [returntype] name "(" [parameters] ")" ":" suite
+methoddef: "on" name_or_t "def" [returntype] name "(" name ["," parameters] ")" ":" suite
+funcdef: "def" [returntype] name_or_t "(" [parameters] ")" ":" suite
 
 // This is a big hack because I couldn't figure out how to slurp everything
 // under a `macro blah:` to pass to python. If/when the parser is rewritten to
@@ -23,7 +23,7 @@ lambda_params: lambda_paramvalue ("," lambda_paramvalue)*
 
 ?stmt: compound_stmt | simple_stmt
 ?simple_stmt: small_stmt (";" small_stmt)* [";"] _NEWLINE
-?small_stmt: (expr_stmt | assign_stmt | del_stmt | pass_stmt | flow_stmt | import_stmt | global_stmt | nonlocal_stmt | assert_stmt | external_stmt)
+?small_stmt: (expr_stmt | assign_stmt | del_stmt | pass_stmt | flow_stmt | import_stmt | nonlocal_stmt | assert_stmt | external_stmt)
 expr_stmt: testlist_expr
 assign_stmt: augassign | assign
 
@@ -35,7 +35,10 @@ assign_stmt: augassign | assign
                | funcdecl
 
 ?name_with_package: name_with_package "::" name
-                  | name -> ident
+                  | name_or_t
+
+name_or_t: name -> ident
+         | backticked_letter -> t_ident
 
 // Similar to funcdef, but return must be included, and parameters can't have names
 funcdecl: "def" returntype "(" [parameter_types] ")"
@@ -68,14 +71,13 @@ dotted_as_name: dotted_name ["as" name]
 import_as_names: import_as_name ("," import_as_name)* [","]
 dotted_as_names: dotted_as_name ("," dotted_as_name)*
 dotted_name: name ("." name)*
-global_stmt: "global" name ("," name)*
 nonlocal_stmt: "nonlocal" name ("," name)*
 assert_stmt: "assert" test ["," test]
 external_stmt: "external"
 
 ?compound_stmt: if_stmt | while_stmt | for_stmt | with_stmt
                 | funcdef | methoddef | structdef | uniondef | macro_with_block_stmt
-                | import_macros_stmt
+                | import_macros_stmt | quote_stmt
 if_stmt: "if" (test | optional_unwrap) ":" suite elifs ["else" ":" suite]
 optional_unwrap: test "as" unwrap_target
 ?unwrap_target: name -> ident
@@ -89,6 +91,8 @@ with_items: with_item ("," with_item)*
 with_item: test ["as" name]
 
 macro_with_block_stmt: test ":" suite
+
+quote_stmt: "quote" name ":" suite
 
 suite: simple_stmt | _NEWLINE _INDENT stmt+ _DEDENT
 
@@ -133,7 +137,7 @@ suite: simple_stmt | _NEWLINE _INDENT stmt+ _DEDENT
      | "{" comprehension{key_value} "}" -> dict_comprehension
      | "{" _exprlist "}" -> set
      | "{" comprehension{test} "}" -> set_comprehension
-     | name -> ident
+     | name_or_t
      | number
      | string_concat
      | "(" test ")"
@@ -160,8 +164,8 @@ key_value: test ":" test
 
 _exprlist: test (","  test)* [","]
 
-structdef: "struct" name ":" struct_union_types
-uniondef: "union" name ":" struct_union_types
+structdef: "struct" name_or_t ":" struct_union_types
+uniondef: "union" name_or_t ":" struct_union_types
 
 struct_union_types: typed_var _NEWLINE
                   | _NEWLINE _INDENT (typed_var _NEWLINE)+ _DEDENT
@@ -194,6 +198,8 @@ _NEWLINE: ( /\r?\n[\t ]*/ )+
 // Python terminals
 
 !name: NAME
+!backticked_letter: BACKTICKED_LETTER
+BACKTICKED_LETTER: /`[A-Z]/
 NAME: /[^\W\d]\w*/
 COMMENT: /\/\/[^\n]*/
 

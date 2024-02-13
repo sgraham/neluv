@@ -3,7 +3,7 @@ def stuff():
   *int p = &things[2]
 ---
 TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
-                                     name='stuff',
+                                     name=Ident(name='stuff'),
                                      params=[],
                                      body=Block(entries=[VarDecl(type=FixedArrayDecl(base=Type(base='i32'),
                                                                                      size=Number(value=4)),

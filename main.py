@@ -98,6 +98,10 @@ class ToAst(Transformer):
     #print('NAME', n, file=sys.stderr)
     return str(n)
 
+  def BACKTICKED_LETTER(self, n):
+    #print('NAME', n, file=sys.stderr)
+    return str(n)
+
   def STRING(self, v):
     return v[1:-1]
 
@@ -127,6 +131,12 @@ class ToAst(Transformer):
     if x:
       return x
     return last.Ident(children[0])
+
+  def t_ident(self, children):
+    return last.TIdent(children[0])
+
+  def backticked_letter(self, children):
+    return children[0]
 
   def const_null(self, children):
     return _KEYWORDS['null']
@@ -334,18 +344,27 @@ class ToAst(Transformer):
     assert False, "unhandled case in funcdef"
 
   def methoddef(self, children):
+    #print('METHODDEF', children)
     struct = children[0]
+    assert isinstance(struct, last.Ident) or isinstance(struct, last.TIdent)
     rtype = children[1] or _KEYWORDS['auto']
     funcname = children[2]
     selfname = children[3]
     args = children[4] or []
     body = children[5]
-    args_with_self = [last.TypedVar(last.PointerDecl(last.Ident(struct)), selfname)] + args
-    return last.FuncDef(rtype, struct + '$' + funcname, args_with_self, body)
-    return None
+    args_with_self = [last.TypedVar(last.PointerDecl(struct), selfname)] + args
+    if isinstance(struct, last.Ident):
+      joined = last.Ident(struct.name + '$' + funcname)
+    else:
+      joined = last.JoinIdents([struct, last.Ident('$' + funcname)])
+    #print('METHODDEF', joined)
+    return last.FuncDef(rtype, joined, args_with_self, body)
 
   def import_macros_stmt(self, children):
     return last.ImportMacros(children[0])
+
+  def quote_stmt(self, children):
+    return last.Quote(children[0], children[1])
 
   def funcdecl(self, children):
     type = children[0] or _KEYWORDS['auto']
@@ -477,7 +496,8 @@ class Compiler:
     self.infer_types()
 
     for contained, gsi in self.generated_structs.items():
-      self.globals[gsi.struct.name] = last.SymTabEntry(gsi.node, gsi.struct)
+      assert isinstance(gsi.struct.name, last.Ident)
+      self.globals[gsi.struct.name.name] = last.SymTabEntry(gsi.node, gsi.struct)
 
   def is_lexically_before(self, a, b):
     if a.line == b.line: return a.column < b.column
@@ -497,8 +517,9 @@ class Compiler:
         if x.is_pending_nonlocal and self.parent.is_lexically_before(node, x.ref_node):
           self.parent.error_at(node, 'name "%s" is used before nonlocal declaration' % node.name)
         else:
+          assert isinstance(self.func.name, last.Ident)
           self.parent.error_at(node,
-              'redefinition of "%s" in "%s"' % (node.name, self.func.name))
+              'redefinition of "%s" in "%s"' % (node.name, self.func.name.name))
         return
 
       # TODO: This is probably in the wrong place. resolve_type_names makes more
@@ -610,8 +631,7 @@ class Compiler:
       if x: x(node)
       return to_return
 
-  def insert_global_or_error(self, node):
-    name = node.name
+  def insert_global_or_error(self, name, node):
     if self.globals.get(name):
       self.error_at(node, 'redefinition at global scope of "%s"' % name)
     ty = None
@@ -638,7 +658,7 @@ class Compiler:
           if n == 'co_argcount' and v == 1:
             for l,o in loc.items():
               func.__globals__[l] = o
-            self.insert_global_or_error(last.MacroDef(name, func))
+            self.insert_global_or_error(name, last.MacroDef(name, func))
             break
 
   def load_package(self, imp_pkg):
@@ -661,9 +681,11 @@ class Compiler:
     add_to_toplevel = []
     for tl in self.ast_root.body.entries:
       if (isinstance(tl, last.FuncDef) or
-          isinstance(tl, last.VarDecl) or
           isinstance(tl, last.Struct)):
-        self.insert_global_or_error(tl)
+        assert isinstance(tl.name, last.Ident), str(tl.name)
+        self.insert_global_or_error(tl.name.name, tl)
+      elif isinstance(tl, last.VarDecl):
+        self.insert_global_or_error(tl.name, tl)
       elif isinstance(tl, last.Assign) and isinstance(tl.lhs, last.Ident):
         # Handled below.
         pass
@@ -674,10 +696,10 @@ class Compiler:
           if not isinstance(f, last.FuncDef):
             self.error_at(f, 'expecting only function definitions in "on" block')
           f.name = '%s$%s' % (tl.name, f.name)
-          self.insert_global_or_error(f)
+          self.insert_global_or_error(f.name, f)
       elif isinstance(tl, last.Import):
         package = self.load_package(tl.package)
-        self.insert_global_or_error(package)
+        self.insert_global_or_error(package.name, package)
       elif isinstance(tl, last.ImportFrom):
         package = self.load_package(tl.package)
         # TODO: this only supports function import currently
@@ -686,16 +708,18 @@ class Compiler:
             func = x.ref_node
             if ii.renamed:
               copy = func.clone()
-              copy.name = ii.renamed
+              copy.name = last.Ident(ii.renamed)
               args = [last.Ident(p.name) for p in func.params]
               internal_name = last.Ident(ii.what)
               internal_name.special = True
               copy.body = last.Block([last.Return(last.FuncCall(internal_name, args))])
               copy.hidden = True
               add_to_toplevel.append(copy)
-              self.insert_global_or_error(copy)
+              assert isinstance(copy.name, last.Ident)
+              self.insert_global_or_error(copy.name.name, copy)
             else:
-              self.insert_global_or_error(func)
+              assert isinstance(func.name, last.Ident)
+              self.insert_global_or_error(func.name.name, func)
           else:
             self.error_at(ii, '%s not found in %s' % (ii.what, package.name))
       else:
@@ -710,7 +734,7 @@ class Compiler:
         x = last.VarDecl(self.expr_type(None, tl.rhs), tl.lhs.name, tl.rhs)
         x.copy_meta(tl)
         self.ast_root.body.entries[i] = x
-        self.insert_global_or_error(x)
+        self.insert_global_or_error(x.name, x)
       # TODO: multiple return tuple assignments
 
   def resolve_type_names(self):
@@ -845,9 +869,11 @@ class Compiler:
         if self.cur_func_stack:
           cur = self.cur_func_stack[-1]
           # Give the hoisted function a unique-ish name.
-          old_name = nested.name
-          new_name = old_name + '$%s' % cur.name
-          nested.name = new_name
+          assert isinstance(nested.name, last.Ident)
+          assert isinstance(cur.name, last.Ident)
+          old_name = nested.name.name
+          new_name = old_name + '$%s' % cur.name.name
+          nested.name = last.Ident(new_name)
 
           to_bind = self.parent.find_upvals(nested, self.cur_func_stack + [nested])
           if to_bind:
@@ -886,15 +912,17 @@ class Compiler:
     self.ast_root.body.entries = self.ast_root.body.entries + h.add_to_toplevel
     for tl in h.add_to_toplevel:
       tl.hidden = True
-      self.insert_global_or_error(tl)
+      assert isinstance(tl.name, last.Ident)
+      self.insert_global_or_error(tl.name.name, tl)
 
+  # TODO: this could go in prelude too
   def create_tuple_struct(self, field_types, node):
     c_name_field_types = [self.get_mangled_c_type(t) for t in field_types]
     members = [last.TypedVar(t, '_%d' % i) for i,t in enumerate(field_types)]
     name = '$Tuple$' + '$'.join(str(x) for x in c_name_field_types)
     if name in self.generated_structs:
       return
-    struct = last.Struct(name, members)
+    struct = last.Struct(last.Ident(name), members)
     struct.omit_constructor = True
     self.generated_structs[name] = GeneratedStructInfo(node, struct)
 
@@ -968,7 +996,7 @@ class Compiler:
         opt_struct_name = '$Opt$' + c_base_type_name
         members = [last.TypedVar(_KEYWORDS['bool'], 'has'),
                    last.TypedVar(od.base, 'val')]
-        struct = last.Struct(opt_struct_name, members)
+        struct = last.Struct(last.Ident(opt_struct_name), members)
         struct.omit_constructor = True
         self.parent.generated_structs[c_base_type_name] = GeneratedStructInfo(od, struct)
 
@@ -990,7 +1018,7 @@ class Compiler:
       ]
       base_type_name = self.parent.get_mangled_c_type(elem_type)
       name = '$List$' + base_type_name
-      struct = last.Struct(name, members)
+      struct = last.Struct(last.Ident(name), members)
       struct.omit_constructor = True
       self.parent.generated_structs[base_type_name] = GeneratedStructInfo(node, struct)
       self.parent.HACK_generate_list_int32_methods = True
@@ -1130,7 +1158,8 @@ class Compiler:
     return self.tuple_struct_for_types(field_types)
 
   def method_name(self, static_type, method_name):
-    return '%s$%s' % (static_type.base.name, method_name)
+    assert isinstance(static_type.base.name, last.Ident)
+    return '%s$%s' % (static_type.base.name.name, method_name)
 
   def result_type_of_method(self, static_type, method_name, errnode):
     assert isinstance(static_type, last.Type) and isinstance(static_type.base, last.Struct), str(static_type)
@@ -1296,7 +1325,8 @@ class Compiler:
       if fd.rtype is _KEYWORDS['auto']:
         ret = self.resolve_function_return_type(fd)
         if not ret or fd.rtype is _KEYWORDS['auto']:
-          self.error_at(fd, 'couldn\'t resolve return type for "%s"' % fd.name)
+          assert isinstance(fd.name, last.Ident)
+          self.error_at(fd, 'couldn\'t resolve return type for "%s"' % fd.name.name)
 
   def infer_types(self):
     self.determine_all_auto_function_returns()
@@ -1336,11 +1366,16 @@ class Compiler:
     if isinstance(node, last.PointerDecl):
       return self.get_c_type(node.base) + '*'
     if isinstance(node, last.OptionalDecl):
-      return 'struct ' + self.generated_structs[self.get_mangled_c_type(node.base)].struct.name
+      struct = self.generated_structs[self.get_mangled_c_type(node.base)].struct
+      assert isinstance(struct.name, last.Ident)
+      return 'struct ' + struct.name.name
     if isinstance(node, last.Struct):
-      return 'struct ' + node.name
+      assert isinstance(node.name, last.Ident), str(node.name)  # Not TIdent
+      return 'struct ' + node.name.name
     if isinstance(node, last.ListType) or isinstance(node, last.ListDecl):
-      return 'struct ' + self.generated_structs[self.get_mangled_c_type(node.base)].struct.name
+      struct = self.generated_structs[self.get_mangled_c_type(node.base)].struct
+      assert isinstance(struct.name, last.Ident)
+      return 'struct ' + struct.name.name
     if isinstance(node, last.Type):
       return self.get_c_type(node.base)
     print('GET_C_TYPE', node)
@@ -1601,7 +1636,7 @@ class Compiler:
       return result
     elif isinstance(node, last.Tuple):
       struct = self.tuple_struct_for_values(self.current_function, node.items)
-      return '(struct %s){' % struct.name + ','.join(self.expr(v) for v in node.items) + '}'
+      return '(struct %s){' % struct.name.name + ','.join(self.expr(v) for v in node.items) + '}'
     elif isinstance(node, last.And):
       return '&&'.join(self.expr(x) for x in node.tests)
     elif isinstance(node, last.Or):
@@ -1700,7 +1735,8 @@ class Compiler:
         field_types = [x.type for x in rhs_type.base.members]
         struct = self.tuple_struct_for_types(field_types)
         tmp = get_tmp_var()
-        result = 'struct %s %s = %s;\n' % (struct.name, tmp, self.expr(node.rhs))
+        assert isinstance(struct.name, last.Ident)
+        result = 'struct %s %s = %s;\n' % (struct.name.name, tmp, self.expr(node.rhs))
         for i, x in enumerate(node.lhs.items):
           result += '%s = %s._%d;' % (x.name, tmp, i)
         return result
@@ -1761,7 +1797,8 @@ class Compiler:
       params = 'void'
     else:
       params = ','.join(params)
-    fname = self.get_safe_c_name(func.name)
+    assert isinstance(func.name, last.Ident)
+    fname = self.get_safe_c_name(func.name.name)
     if fname == 'main':
       rtype = 'int'
     else:
@@ -1773,7 +1810,8 @@ class Compiler:
 
   def function_definition(self, func):
     if len(func.body.entries) == 1 and isinstance(func.body.entries[0], last.External):
-      return '\n// %s was external\n' % func.name
+      assert isinstance(func.name, last.Ident)
+      return '\n// %s was external\n' % func.name.name
     result = self.function_forward_declaration(func)
     self.current_function = func
     result += '{'
@@ -1817,7 +1855,8 @@ class Compiler:
 
   def generate_struct(self, obj):
     assert isinstance(obj, last.Struct)
-    result = '\nstruct %s {\n' % obj.name
+    assert isinstance(obj.name, last.Ident)
+    result = '\nstruct %s {\n' % obj.name.name
     for field in obj.members:
       result += '%s %s;\n' % (self.get_c_type(field.type), self.get_safe_c_name(field.name))
     result += '};\n'
@@ -1825,15 +1864,17 @@ class Compiler:
 
   def generate_struct_constructor(self, obj):
     assert isinstance(obj, last.Struct)
+    assert isinstance(obj.name, last.Ident)
+    name = obj.name.name
     if obj.omit_constructor:
       return ''
-    result = '\nstruct %s %s(' % (obj.name, obj.name)
+    result = '\nstruct %s %s(' % (name, name)
     for i,field in enumerate(obj.members):
       result += '%s %s' % (self.get_c_type(field.type), self.get_safe_c_name(field.name))
       if i < len(obj.members) - 1:
         result += ','
     result += '){\n'
-    result += 'struct %s $_ = {0};\n' % obj.name
+    result += 'struct %s $_ = {0};\n' % name
     for field in obj.members:
       n = self.get_safe_c_name(field.name)
       result += '$_.%s = %s;\n' % (n, n)
@@ -1848,7 +1889,8 @@ class Compiler:
       if hasattr(n, 'topo_permanent'):
         return
       if hasattr(n, 'topo_temporary'):
-        self.error_at(n, 'recursive struct definition for "%s"' % n.name)
+        assert isinstance(n.name, last.Ident)
+        self.error_at(n, 'recursive struct definition for "%s"' % n.name.name)
         return
 
       n.topo_temporary = True
@@ -2109,10 +2151,10 @@ def do_tests(parser, test_list, update):
     err = (node, msg)
 
   for t in test_list:
-    #print(t)
     if '.disabled.' in t:
       disabled_list.append(t)
       continue
+    #print(t)
     t = t.replace('\\', '/')
     source, expected = test_contents(t)
     is_parse = t.startswith('test/parse')

@@ -6,7 +6,7 @@ def main():
 ---
 TopLevel(body=Block(entries=[ImportMacros(filename=String(value='my.mac.py')),
                              FuncDef(rtype=Type(base='auto'),
-                                     name='main',
+                                     name=Ident(name='main'),
                                      params=[],
                                      body=Block(entries=[Assign(lhs=Ident(name='x'),
                                                                 rhs=FuncCall(func=Ident(name='test'),

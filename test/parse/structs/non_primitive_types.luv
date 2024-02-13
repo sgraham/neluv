@@ -6,10 +6,10 @@ struct A:
   B y
   bool z
 ---
-TopLevel(body=Block(entries=[Struct(name='B',
+TopLevel(body=Block(entries=[Struct(name=Ident(name='B'),
                                     members=[TypedVar(type=Type(base='i32'),
                                                       name='boo')]),
-                             Struct(name='A',
+                             Struct(name=Ident(name='A'),
                                     members=[TypedVar(type=Type(base='bool'),
                                                       name='x'),
                                              TypedVar(type=Ident(name='B'),

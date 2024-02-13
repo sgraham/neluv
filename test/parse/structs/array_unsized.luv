@@ -1,6 +1,6 @@
 struct X:
   []int array
 ---
-TopLevel(body=Block(entries=[Struct(name='X',
+TopLevel(body=Block(entries=[Struct(name=Ident(name='X'),
                                     members=[TypedVar(type=ListDecl(base=Type(base='i32')),
                                                       name='array')])]))

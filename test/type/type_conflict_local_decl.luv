@@ -6,4 +6,4 @@ def main():
   a = A(5)
 ---
 !
-test/type/type_conflict_local_decl.luv:6:3:previously typed as "Type(base='bool')", now "Type(base=Struct(name='A', members=[TypedVar(type=Type(base='i32'), name='x')]))"
+test/type/type_conflict_local_decl.luv:6:3:previously typed as "Type(base='bool')", now "Type(base=Struct(name=Ident(name='A'), members=[TypedVar(type=Type(base='i32'), name='x')]))"

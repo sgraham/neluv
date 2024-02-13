@@ -2,7 +2,7 @@ def f64 func(bool x, int y):
   pass
 ---
 TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='f64'),
-                                     name='func',
+                                     name=Ident(name='func'),
                                      params=[TypedVar(type=Type(base='bool'),
                                                       name='x'),
                                              TypedVar(type=Type(base='i32'),

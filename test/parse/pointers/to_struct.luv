@@ -5,11 +5,11 @@ def int main():
   *Thing p
   return p.x
 ---
-TopLevel(body=Block(entries=[Struct(name='Thing',
+TopLevel(body=Block(entries=[Struct(name=Ident(name='Thing'),
                                     members=[TypedVar(type=Type(base='i32'),
                                                       name='x')]),
                              FuncDef(rtype=Type(base='i32'),
-                                     name='main',
+                                     name=Ident(name='main'),
                                      params=[],
                                      body=Block(entries=[VarDecl(type=PointerDecl(base=Ident(name='Thing')),
                                                                  name='p',

@@ -4,10 +4,10 @@ def int stuff():
   return things()
 ---
 TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='i32'),
-                                     name='stuff',
+                                     name=Ident(name='stuff'),
                                      params=[],
                                      body=Block(entries=[FuncDef(rtype=Type(base='i32'),
-                                                                 name='things',
+                                                                 name=Ident(name='things'),
                                                                  params=[],
                                                                  body=Block(entries=[Return(value=Number(value=4))]),
                                                                  hidden=False),

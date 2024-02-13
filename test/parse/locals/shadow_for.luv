@@ -4,7 +4,7 @@ def stuff():
     print(x)
 ---
 TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
-                                     name='stuff',
+                                     name=Ident(name='stuff'),
                                      params=[],
                                      body=Block(entries=[VarDecl(type=Type(base='i32'),
                                                                  name='x',

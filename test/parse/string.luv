@@ -2,7 +2,7 @@ def main():
   print("hello")
 ---
 TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
-                                     name='main',
+                                     name=Ident(name='main'),
                                      params=[],
                                      body=Block(entries=[FuncCall(func=Ident(name='print'),
                                                                   args=[String(value='hello')])]),

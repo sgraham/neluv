@@ -5,13 +5,13 @@ def main():
   x, y = mret()
 ---
 TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
-                                     name='mret',
+                                     name=Ident(name='mret'),
                                      params=[],
                                      body=Block(entries=[Return(value=Tuple(items=[Number(value=11),
                                                                                    Number(value=12)]))]),
                                      hidden=False),
                              FuncDef(rtype=Type(base='auto'),
-                                     name='main',
+                                     name=Ident(name='main'),
                                      params=[],
                                      body=Block(entries=[Assign(lhs=Tuple(items=[Ident(name='x'),
                                                                                  Ident(name='y')]),

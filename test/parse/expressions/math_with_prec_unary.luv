@@ -3,7 +3,7 @@ def f():
   y = 3+4*-5
 ---
 TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
-                                     name='f',
+                                     name=Ident(name='f'),
                                      params=[],
                                      body=Block(entries=[Assign(lhs=Ident(name='x'),
                                                                 rhs=Expr(chain=[Number(value=1),

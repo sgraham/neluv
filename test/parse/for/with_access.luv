@@ -5,7 +5,7 @@ def int main():
   return x
 ---
 TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='i32'),
-                                     name='main',
+                                     name=Ident(name='main'),
                                      params=[],
                                      body=Block(entries=[VarDecl(type=Type(base='i32'),
                                                                  name='x',

@@ -3,7 +3,7 @@ def f():
     pass
 ---
 TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
-                                     name='f',
+                                     name=Ident(name='f'),
                                      params=[],
                                      body=Block(entries=[For(it=Ident(name='i'),
                                                              collection=Number(value=3),

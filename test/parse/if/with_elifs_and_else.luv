@@ -9,7 +9,7 @@ def f():
     print(4)
 ---
 TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
-                                     name='f',
+                                     name=Ident(name='f'),
                                      params=[],
                                      body=Block(entries=[If(cond=Const(name='false'),
                                                             body=Block(entries=[FuncCall(func=Ident(name='print'),
