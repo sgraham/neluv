@@ -1,0 +1,81 @@
+// `C for container
+// `T for contained type
+// `I for iterator
+// `L for fixed length (actually capacity)
+
+import_macros "quote.mac.py"
+
+// TODO: this should be able to go inside the quote, but it can't right now
+import C
+
+quote FixedArrayQuoted:
+  struct `C:
+    *`T data
+    int len
+
+  struct `I:
+    *`C seq
+    int cur
+
+  on `C def __getitem__(self, int at):
+    assert at >= 0 and at < self.len
+    return self.data[at]
+
+  on `C def __iter__(self):
+    return `I(self, 0)
+
+  on `C def __del__(self):
+    C.free(self.data)
+    self.data = null
+    self.len = 0
+
+  on `C def ensure_allocated(self):
+    if self.data == null:
+      self.data = C.malloc(sizeof(`T) * `L)
+
+  on `C def append(self, int value):
+    self.ensure_allocated()
+    if self.len >= `L:
+      return false
+    self.data[self.len] = value
+    self.len += 1
+    return true
+
+  on `I def __next__(self):
+    if self.cur >= self.seq.len:
+      return false, 0
+    i32 ret = self.seq.data[self.cur]
+    self.cur += 1
+    return true, ret
+
+// TODO: XXX resolve order is broken I think (this can't infer i32)
+
+
+def main():
+  four_ints = FixedArray(int, 4)
+  four_ints.append(100)
+  four_ints.append(200)
+  four_ints.append(300)
+
+  print(four_ints.len)
+  for i in four_ints:
+    print(i)
+
+  print(four_ints.append(400))
+  print(four_ints.append(500))
+
+  print(four_ints.len)
+  for i in four_ints:
+    print(i)
+---
+3
+100
+200
+300
+true
+false
+4
+100
+200
+300
+400

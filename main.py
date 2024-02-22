@@ -250,9 +250,6 @@ class ToAst(Transformer):
   def dotted_name(self, children):
     return children
 
-  def on_block(self, children):
-    return last.On(children[0], children[1])
-
   def continue_stmt(self, children):
     return last.Continue()
 
@@ -575,11 +572,14 @@ class Compiler:
       for name in node.vars:
         self.func.add_to_symtab(name, last.SymTabEntry(None, node, is_pending_nonlocal=True))
 
+  def build_function_symtab(self, f):
+    f.push_empty_symtab_scope()
+    self.Visit(self.ScanForNonlocal(f, self), f.body, do_not_cross_types=[last.FuncDef])
+    self.Visit(self.FuncSymTab(f, self), f.body, do_not_cross_types=[last.FuncDef])
+
   def build_function_symtabs(self):
     for f in self.find_func_defs(self.ast_root):
-      f.push_empty_symtab_scope()
-      self.Visit(self.ScanForNonlocal(f, self), f.body, do_not_cross_types=[last.FuncDef])
-      self.Visit(self.FuncSymTab(f, self), f.body, do_not_cross_types=[last.FuncDef])
+      self.build_function_symtab(f)
 
   class Visit:
     def __init__(self, visitor, node, do_not_cross_types=None):
@@ -604,31 +604,44 @@ class Compiler:
         if result is not None:
           to_return = result
 
-      node.tag_for_visit = self.visit_tag
+      if to_return:
+        to_return.tag_for_visit = self.visit_tag
+      else:
+        node.tag_for_visit = self.visit_tag
 
       if self.do_not_cross_types:
         for dnct in self.do_not_cross_types:
           if isinstance(node, dnct):
+            # XXX ugly copy pasta to keep in sync below
             x = getattr(self.visitor, 'after_' + node.__class__.__name__, None)
-            if x: x(node)
+            if x:
+              after_to_return = x(node)
+              if after_to_return:
+                assert not to_return, 'both initial visit_ and after_ tried to replace'
+                to_return = after_to_return
             return to_return
 
       for f in dataclasses.fields(node):
         field = getattr(node, f.name)
 
-        if isinstance(field, last.AstNode):
+        if isinstance(field, last.AstNode) or isinstance(field, last.Type):
           ret = self.impl(field)
           if ret is not None:
             setattr(node, f.name, ret)
         elif isinstance(field, list):
           for i, lx in enumerate(field):
-            if isinstance(lx, last.AstNode):
+            if isinstance(lx, last.AstNode) or isinstance(lx, last.Type):
               ret = self.impl(lx)
               if ret is not None:
                 field[i] = ret
 
+      # XXX ugly copy pasta to keep in sync above
       x = getattr(self.visitor, 'after_' + node.__class__.__name__, None)
-      if x: x(node)
+      if x:
+        after_to_return = x(node)
+        if after_to_return:
+          assert not to_return, 'both initial visit_ and after_ tried to replace'
+          to_return = after_to_return
       return to_return
 
   def insert_global_or_error(self, name, node):
@@ -697,6 +710,8 @@ class Compiler:
             self.error_at(f, 'expecting only function definitions in "on" block')
           f.name = '%s$%s' % (tl.name, f.name)
           self.insert_global_or_error(f.name, f)
+      elif isinstance(tl, last.Quote):
+        self.insert_global_or_error(tl.name, tl)
       elif isinstance(tl, last.Import):
         package = self.load_package(tl.package)
         self.insert_global_or_error(package.name, package)
@@ -793,7 +808,9 @@ class Compiler:
       def __init__(self): self.result = []
       def visit_FuncDef(self, node): self.result.append(node)
     finder = FindFuncDef()
-    self.Visit(finder, start, do_not_cross_types=[last.FuncDef] if top_level_only else None)
+    no_cross = [last.FuncDef] if top_level_only else []
+    no_cross.append(last.Quote)
+    self.Visit(finder, start, do_not_cross_types=no_cross)
     return finder.result
 
   def replace_ident_references(self, start, old, new):
@@ -1106,7 +1123,8 @@ class Compiler:
       self.current_function = None
 
     resolver = self.ResolveIdents(self)
-    self.Visit(resolver, self.ast_root if not start_at else start_at)
+    self.Visit(resolver, self.ast_root if not start_at else start_at,
+               do_not_cross_types=[last.Quote])
 
     if start_at:
       self.current_function = self.current_function_saved.pop()
@@ -1115,17 +1133,45 @@ class Compiler:
     assert (isinstance(node, last.FuncCall) and isinstance(node.func, last.Ident)
             and isinstance(mac, last.MacroDef))
     #print("CALLING MACRO", node.func.name)
+
+    class Quotes:
+      def __init__(self, globs):
+        for n,data in globs.items():
+          if isinstance(data.ref_node, last.Quote):
+            setattr(self, n, data.ref_node)
+
+    class Unquoter:
+      def __init__(s, subs):
+        s.subs = subs
+
+      def visit_TIdent(s, ti):
+        #print('TRYING TO SUB', ti.name)
+        subwith = s.subs.get(ti.name)
+        if not subwith:
+          s.error_at(ti, 'trying to unquote "%s", but not provided' % ti.name)
+        return subwith
+
+      def after_JoinIdents(s, ji):
+        assert all(isinstance(x, last.Ident) for x in ji.idents), str(ji)
+        return last.Ident(''.join(x.name for x in ji.idents))
+
     class Macro:
       def __init__(s):
         s.args = node.args
         s.block = None
         s.func = self.current_function
         s.keywords = _KEYWORDS
+        s.quotes = Quotes(self.globals)
       def expr_type(s, node):
         ret = self.expr_type(self.current_function, node)
         if ret is _KEYWORDS['auto']:
           assert False, 'internal error, unable to get type for "%s"' % node
         return ret
+      def keyword_or_ident(s, name):
+        x = _KEYWORDS.get(name, None)
+        if x:
+          return x
+        return last.Ident(children[0])
       def parse_expr(s, code):
         tree = self.parser.parse(code + '\n', include_prelude=False)
         ast = ToAst().transform(tree)
@@ -1134,9 +1180,24 @@ class Compiler:
         tree = self.parser.parse(code + '\n', include_prelude=False)
         ast = ToAst().transform(tree)
         return ast
+      def have_global(s, glob):
+        return glob in self.globals
+      def insert_global(s, name, glob):
+        self.insert_global_or_error(name, glob)
+        self.ast_root.body.entries.append(glob)
+        if isinstance(glob, last.FuncDef):
+          self.build_function_symtab(glob)
+          # XXX XXX XXX I think this needs to do the resolve_types
+          self.resolve_idents(glob)
+        #pprint.pprint(glob)
+      def unquote(s, ast, subs):
+        unquoter = Unquoter(subs)
+        self.Visit(unquoter, ast)
+        return ast
     macro = Macro()
     result = mac.pyfunc(macro)
-    #print('RETURING A THING')
+    self.resolve_type_names()
+    self.resolve_idents(result)
     return result
 
   def find_return_stmts(self, func):
