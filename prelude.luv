@@ -75,14 +75,14 @@ quote QuotedList:
       self.ptr = newp
       self.cap = newcap
 
-  on `C def append(self, int value):
+  on `C def append(self, `T value):
     self.reserve(self.len + 1)
     self.ptr[self.len] = value
     self.len += 1
 
   on `I def __next__(self):
     if self.cur >= self.seq.len:
-      return false, 0
+      return false, zeroed(`T)
     `T ret = self.seq.ptr[self.cur]
     self.cur += 1
     return true, ret

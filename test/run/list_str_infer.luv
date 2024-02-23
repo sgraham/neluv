@@ -1,0 +1,9 @@
+def main():
+  L = ["hello", "hola", "bonjour"]
+  for h in L:
+    print(h)
+  del L
+---
+hello
+hola
+bonjour

@@ -1267,6 +1267,10 @@ class Compiler:
           assert len(expr.args) == 1
           return _KEYWORDS['int']   # TODO: 32/64
 
+        if expr.func.name == 'zeroed':
+          assert len(expr.args) == 1
+          return self.expr_type(funcdef, expr.args[0])
+
         if expr.func.name == 'next':
           assert len(expr.args) == 1
           arg_type = self.expr_type(funcdef, expr.args[0])
@@ -1548,6 +1552,13 @@ class Compiler:
           return 'sizeof(%s)' % self.get_c_type(arg_type)
         else:
           self.error_at(node.func, 'incorrect number of arguments to "sizeof"')
+
+      if isinstance(node.func, last.Ident) and node.func.name == 'zeroed':
+        if len(node.args) == 1:
+          arg_type = self.expr_type(self.current_function, node.args[0])
+          return '(%s){0}' % self.get_c_type(arg_type)
+        else:
+          self.error_at(node.func, 'incorrect number of arguments to "zeroed"')
 
       if isinstance(node.func, last.Ident) and node.func.name == 'next':
         if len(node.args) == 1:
@@ -2017,6 +2028,7 @@ struct $Str $Str$__add__(struct $Str a, struct $Str b) {
 void $Str$__del__(struct $Str* self) {
   free(self->ptr);
 }
+#define $Str$__getitem__(a, b) (a[b])
 
 #define double$__lit__(a) (a)
 #define double$__del__(a)
@@ -2172,7 +2184,7 @@ def do_tests(parser, test_list, update):
     if '.disabled.' in t:
       disabled_list.append(t)
       continue
-    print(t)
+    #print(t)
     t = t.replace('\\', '/')
     source, expected = test_contents(t)
     is_parse = t.startswith('test/parse')

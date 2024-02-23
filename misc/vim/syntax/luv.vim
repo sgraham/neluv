@@ -39,6 +39,7 @@ syn keyword     luvKeyword       true
 syn keyword     luvKeyword       union
 syn keyword     luvKeyword       while
 syn keyword     luvKeyword       with
+syn keyword     luvKeyword       zeroed
 hi def link     luvKeyword       Keyword
 
 " Basic type declarations

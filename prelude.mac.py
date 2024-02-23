@@ -38,6 +38,7 @@ def List(macro):
     assert len(macro.args) == 1
     assert isinstance(macro.args[0], last.Type)
     name = macro.args[0].base
+    #__builtins__['print']('NAME', name)
     c = 'List_' + name
     if not macro.have_global(c):
         ast = macro.unquote(macro.quotes.QuotedList, {
@@ -45,6 +46,7 @@ def List(macro):
             '`T': macro.keyword_or_ident(name),
             '`I': last.Ident('ListIter_' + name)
             })
+        #import pprint
         #pprint.pprint('UNQUOTE RESULT')
         #pprint.pprint(ast)
         for tl in ast.body.entries:
