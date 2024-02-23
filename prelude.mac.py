@@ -1,52 +1,5 @@
 import last
 
-_LIST_TEMPLATE = '''
-import C
-
-struct List$`T:
-    *`T ptr
-    int len
-    int cap
-
-struct List$`T$Iter:
-    *List$`T seq
-    int cur
-
-on List$`T def __getitem__(*List$`T self, int at):
-    // assert at >= 0 and at < self.len
-    return self.ptr[at]
-
-on list$`T def __iter__(*List$`T self):
-    return List$`T$Iter(self, 0)
-
-on list$`T def __del__(*List$`T self):
-    C.free(self.ptr)
-    L.ptr = NULL
-    L.len = 0
-    L.cap = 0
-
-on List$`T def reserve(*List$`T self, int cap):
-    if self.cap < cap:
-        *int newp = C.malloc(sizeof(int) * cap)
-        C.memcpy(newp, self.ptr, sizeof(int) * self.len)
-        // memset rest?
-        C.free(self.ptr)
-        self.ptr = newp
-        self.cap = cap
-
-on List$`T def append(*List$`T self, $`T value):
-    self.reserve(16 if self.cap < 16 else self.cap * 2)
-    self.ptr[self.len] = value
-    self.len += 1
-
-on List$`T$Iter def __next__(*List$`T$Iter self):
-    if self.cur >= self.seq.len:
-        return false, 0
-    ret = self.seq.ptr[self.cur]
-    self.cur += 1
-    return true, ret
-'''
-
 def instantiate_list(macro):
     pass
 
@@ -80,3 +33,23 @@ def print(macro):
             result.append(last.FuncCall(last.Ident('printspace'), []))
     result.append(last.FuncCall(last.Ident('printnl'), []))
     return last.Block(result)
+
+def List(macro):
+    assert len(macro.args) == 1
+    assert isinstance(macro.args[0], last.Type)
+    name = macro.args[0].base
+    c = 'List_' + name
+    if not macro.have_global(c):
+        ast = macro.unquote(macro.quotes.QuotedList, {
+            '`C': last.Ident(c),
+            '`T': macro.keyword_or_ident(name),
+            '`I': last.Ident('ListIter_' + name)
+            })
+        #pprint.pprint('UNQUOTE RESULT')
+        #pprint.pprint(ast)
+        for tl in ast.body.entries:
+            assert isinstance(tl.name, last.Ident), tl.name
+            #print('INSERT', tl.name.name)
+            macro.insert_global(tl.name.name, tl)
+    return last.FuncCall(macro.parse_expr(c),
+                         args=[macro.keyword_or_ident('null'), last.Number(0), last.Number(0)])

@@ -475,8 +475,6 @@ class Compiler:
 
     self.generated_structs = {}
 
-    self.HACK_generate_list_int32_methods = False  # TODO XXX
-
     self.ast_root = ast_root
     self.parser = parser
 
@@ -932,6 +930,7 @@ class Compiler:
 
   # TODO: this could go in prelude too
   def create_tuple_struct(self, field_types, node):
+    #print('CREATE_TUPLE_STRUCT', node, field_types)
     c_name_field_types = [self.get_mangled_c_type(t) for t in field_types]
     members = [last.TypedVar(t, '_%d' % i) for i,t in enumerate(field_types)]
     name = '$Tuple$' + '$'.join(str(x) for x in c_name_field_types)
@@ -941,10 +940,18 @@ class Compiler:
     struct.omit_constructor = True
     self.generated_structs[name] = GeneratedStructInfo(node, struct)
 
-  def create_struct(self, name, members, node=None, omit_constructor=True):
-    struct = last.Struct(name, members)
-    struct.omit_constructor = True
-    self.generated_structs[name] = GeneratedStructInfo(None, struct)
+  def get_list_struct_for_contained_type(self, elem_type):
+    base_type_name = self.get_mangled_c_type(elem_type)
+    # This should have been created ResolveIdents.make_list_struct (if it fails here).
+    return self.generated_structs[base_type_name].struct
+
+  def create_list_struct(self, elem_type, node):
+    result = self.expand_macro(
+        last.FuncCall(last.Ident('List'), [elem_type]), self.globals.get('List').ref_node)
+    base_type_name = self.get_mangled_c_type(elem_type)
+    struct = self.globals[result.func.name].ref_node
+    # TODO XXX: Opt and List conflict by base_type_name here (very dumb)
+    self.generated_structs[base_type_name] = GeneratedStructInfo(node, struct)
     return struct
 
   class ResolveIdents:
@@ -983,9 +990,7 @@ class Compiler:
         tuple_index = 0
 
       coll_type = self.parent.expr_type(self.parent.current_function, node.collection)
-      if isinstance(coll_type, last.ListType):
-        rhs_type = coll_type.base
-      elif it_type := self.parent.result_type_of_method(coll_type, '__iter__', errnode=node):
+      if it_type := self.parent.result_type_of_method(coll_type, '__iter__', errnode=node):
         it_return_type = self.parent.result_type_of_method(it_type, '__next__', errnode=node)
         assert (isinstance(it_return_type, last.Type) and
                 isinstance(it_return_type.base, last.Struct))
@@ -995,7 +1000,7 @@ class Compiler:
         assert False, "todo %s" % coll_type
       self.resolve_ident(node.it, rhs_type, tuple_index=None)
 
-    def visit_Assign(self, assign):
+    def after_Assign(self, assign):
       if isinstance(assign.lhs, last.Ident):
         rhs_type = self.parent.expr_type(self.parent.current_function, assign.rhs)
         self.resolve_ident(assign.lhs, rhs_type, tuple_index=None)
@@ -1022,25 +1027,15 @@ class Compiler:
       self.resolve_ident(ou.bind, opt_type.base, tuple_index=None)
 
     def visit_Tuple(self, tc):
-      field_types = [self.parent.expr_type(self.parent.current_function, v) for v in tc.items]
-      self.parent.create_tuple_struct(field_types, tc)
-
-    def make_list_struct(self, elem_type, node):
-      members = [
-          last.TypedVar(last.PointerDecl(elem_type), "ptr"),
-          last.TypedVar(_KEYWORDS['i64'], "len"),
-          last.TypedVar(_KEYWORDS['i64'], "cap")
-      ]
-      base_type_name = self.parent.get_mangled_c_type(elem_type)
-      name = '$List$' + base_type_name
-      struct = last.Struct(last.Ident(name), members)
-      struct.omit_constructor = True
-      self.parent.generated_structs[base_type_name] = GeneratedStructInfo(node, struct)
-      self.parent.HACK_generate_list_int32_methods = True
+      #print('VISIT_TUPLE0', tc)
+      #field_types = [self.parent.expr_type(self.parent.current_function, v) for v in tc.items]
+      #print('VISIT_TUPLE1', field_types)
+      #self.parent.create_tuple_struct(field_types, tc)
+      pass
 
     def visit_ListComprehension(self, lc):
       elem_type = self.parent.expr_type(self.parent.current_function, lc.body.result)
-      self.make_list_struct(elem_type, lc)
+      self.parent.create_list_struct(elem_type, lc)
 
     def visit_List(self, l):
       if len(l.values) == 0:
@@ -1050,7 +1045,7 @@ class Compiler:
         t2 = self.parent.expr_type(self.parent.current_function, i)
         if t is not t2:
           self.error_at(l, 'inconsistent types in list, was "%s" now "%s"' % (t, t2))
-      self.make_list_struct(t, l)
+      self.parent.create_list_struct(t, l)
 
     def visit_FuncCall(self, funccall):
       if isinstance(funccall.func, last.Ident):
@@ -1129,7 +1124,8 @@ class Compiler:
 
   def expand_macro(self, node, mac):
     assert (isinstance(node, last.FuncCall) and isinstance(node.func, last.Ident)
-            and isinstance(mac, last.MacroDef))
+            and isinstance(mac, last.MacroDef)), \
+                str(node) + '\n---\n' + str(node.func) + '\n---\n' + str(mac)
     #print("CALLING MACRO", node.func.name)
 
     class Quotes:
@@ -1217,12 +1213,22 @@ class Compiler:
     return self.tuple_struct_for_types(field_types)
 
   def method_name(self, static_type, method_name):
-    assert isinstance(static_type.base.name, last.Ident)
-    return '%s$%s' % (static_type.base.name.name, method_name)
+    # XXX Type vs Struct
+    if isinstance(static_type, last.Type):
+      return '%s$%s' % (static_type.base.name.name, method_name)
+    elif isinstance(static_type, last.Struct):
+      return '%s$%s' % (static_type.name.name, method_name)
+    else:
+      assert False, "type or struct"
 
   def result_type_of_method(self, static_type, method_name, errnode):
-    assert isinstance(static_type, last.Type) and isinstance(static_type.base, last.Struct), str(static_type)
-    func_name = self.method_name(static_type, method_name)
+    # XXX Type vs Struct
+    if isinstance(static_type, last.Type) and isinstance(static_type.base, last.Struct):
+      ty = static_type.base
+    elif isinstance(static_type, last.Struct):
+      ty = static_type
+
+    func_name = self.method_name(ty, method_name)
     ste_in_globals = self.globals.get(func_name)
     if ste_in_globals:
       in_globals = ste_in_globals.ref_node
@@ -1230,7 +1236,7 @@ class Compiler:
         return None  # TODO: test for this case, can it get hit?
       return in_globals.rtype
     else:
-      self.error_at(errnode, 'no %s found on "%s"' % (method_name, static_type.base.name))
+      self.error_at(errnode, 'no %s found on "%s"' % (method_name, ty.name))
 
   def expr_type(self, funcdef, expr):
     if expr is None:
@@ -1264,6 +1270,7 @@ class Compiler:
         if expr.func.name == 'next':
           assert len(expr.args) == 1
           arg_type = self.expr_type(funcdef, expr.args[0])
+          #print('NEXT', arg_type)
           if isinstance(arg_type, last.Type) and isinstance(arg_type.base, last.Struct):
             # Find __next__() func for type and determine its return type
             return self.result_type_of_method(arg_type, '__next__', errnode=expr)
@@ -1324,14 +1331,19 @@ class Compiler:
     elif isinstance(expr, last.ListDecl):
       assert False, str(expr)
     elif isinstance(expr, last.ListComprehension):
-      return last.ListType(self.expr_type(funcdef, expr.body.result))
+      elem_type = self.expr_type(funcdef, expr.body.result)
+      return self.get_list_struct_for_contained_type(elem_type)
     elif isinstance(expr, last.List):
       # Initial visit to create struct does other error checks.
-      return last.ListType(self.expr_type(funcdef, expr.values[0]))
+      elem_type = self.expr_type(funcdef, expr.values[0])
+      return self.get_list_struct_for_contained_type(elem_type)
     elif isinstance(expr, last.GetAttr):
       lhs = self.expr_type(funcdef, expr.lhs)
-      assert isinstance(lhs, last.Type), str(lhs)
-      cur = lhs.base
+      # XXX Type vs Struct again
+      if isinstance(lhs, last.Type):
+        cur = lhs.base
+      else:
+        cur = lhs
       while isinstance(cur, last.PointerDecl):
         cur = cur.base
       assert isinstance(cur, last.Struct), str(cur)
@@ -1342,11 +1354,13 @@ class Compiler:
         self.error_at(expr, '"%s" not found on "%s"' % (expr.rhs, cur.name))
     elif isinstance(expr, last.GetItem):
       obj = self.expr_type(funcdef, expr.obj)
-      assert isinstance(obj, last.Type)
+      # XXX Type vs Struct
       while isinstance(obj, last.PointerDecl):
         obj = obj.base
-      if isinstance(obj, last.ListType) or isinstance(obj, last.ListDecl):
+      if isinstance(obj, last.ListDecl):
         return obj.base
+      elif isinstance(obj, last.Struct):
+        return self.result_type_of_method(obj, '__getitem__', obj)
       else:
         return obj
     elif isinstance(expr, last.Tuple):
@@ -1431,16 +1445,19 @@ class Compiler:
     if isinstance(node, last.Struct):
       assert isinstance(node.name, last.Ident), str(node.name)  # Not TIdent
       return 'struct ' + node.name.name
-    if isinstance(node, last.ListType) or isinstance(node, last.ListDecl):
+    if isinstance(node, last.ListDecl):
       struct = self.generated_structs[self.get_mangled_c_type(node.base)].struct
       assert isinstance(struct.name, last.Ident)
       return 'struct ' + struct.name.name
     if isinstance(node, last.Type):
+      # TODO: This should probably only be for a special BaseType, because for
+      # subclasses of Type, this is wrong and confusing.
       return self.get_c_type(node.base)
     print('GET_C_TYPE', node)
     return '??/*%s*/' % node
 
   def get_mangled_c_type(self, node):
+    #print('GET_MANGLED_C_TYPE', node)
     x = self.get_c_type(node)
     x = x.replace('struct ', '')
     return x
@@ -2096,64 +2113,6 @@ static void printnl(void) {
 
       if self.have_error: return
 
-      header('late implementations')
-      f.write(r'''
-struct $List$int32_tIter {
-  struct $List$int32_t* seq;
-  int32_t cur;
-};
-
-#define $List$int32_tIterReturn struct $Tuple$_Bool$int32_t
-#define $List$int32_tIterValue int32_t
-
-''')
-
-      if self.HACK_generate_list_int32_methods:
-        f.write(r'''
-int32_t $List$int32_t$__getitem__(struct $List$int32_t* L, int64_t at) {
-  assert(at >= 0 && at < L->len);
-  return L->ptr[at];
-}
-
-struct $List$int32_tIter $List$int32_t$__iter__(struct $List$int32_t* self) {
-  return (struct $List$int32_tIter){self, 0};
-}
-
-struct $Tuple$_Bool$int32_t $List$int32_tIter$__next__(struct $List$int32_tIter* iter) {
-  if (iter->cur >= iter->seq->len) {
-    return (struct $Tuple$_Bool$int32_t){0};
-  }
-  int32_t ret = iter->seq->ptr[iter->cur];
-  iter->cur++;
-  return (struct $Tuple$_Bool$int32_t){1, ret};
-}
-
-void $List$int32_t$__del__(struct $List$int32_t* L) {
-  free(L->ptr);
-  L->ptr = NULL;
-  L->len = 0;
-  L->cap = 0;
-}
-
-void $List$int32_t$reserve(struct $List$int32_t* L, int64_t cap) {
-  if (L->cap < cap) {
-    int32_t* newp = malloc(sizeof(int32_t) * cap);
-    memcpy(newp, L->ptr, sizeof(int32_t) * L->len);
-    // memset rest?
-    free(L->ptr);
-    L->ptr = newp;
-    L->cap = cap;
-  }
-}
-
-void $List$int32_t$append(struct $List$int32_t* L, int32_t value) {
-  if (L->len == L->cap) {
-    $List$int32_t$reserve(L, L->cap < 16 ? 16 : L->cap * 2);
-  }
-  L->ptr[L->len++] = value;
-}
-''')
-
       header('function implementations')
       for n,ste in self.globals.items():
         obj = ste.ref_node
@@ -2213,7 +2172,7 @@ def do_tests(parser, test_list, update):
     if '.disabled.' in t:
       disabled_list.append(t)
       continue
-    #print(t)
+    print(t)
     t = t.replace('\\', '/')
     source, expected = test_contents(t)
     is_parse = t.startswith('test/parse')

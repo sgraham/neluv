@@ -1,0 +1,45 @@
+def main():
+  L = List(int)
+  L.append(33)
+  L.append(44)
+  L.append(55)
+
+  for i in L:
+    print(i)
+  del L
+
+  L.append(3)
+  L.append(4)
+
+  for i in L:
+    print(i)
+  del L
+
+  M = List(int)
+  M.append(1)
+  M.append(2)
+  M.append(3)
+  M.append(4)
+  M.append(5)
+  M.append(6)
+
+  print(M.len)
+  for i in M:
+    print(i)
+
+  del M
+  del M
+  del M
+---
+33
+44
+55
+3
+4
+6
+1
+2
+3
+4
+5
+6

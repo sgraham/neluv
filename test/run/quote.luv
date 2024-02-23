@@ -6,7 +6,7 @@
 import_macros "quote.mac.py"
 
 // TODO: this should be able to go inside the quote, but it can't right now
-import C
+//import C
 
 quote FixedArrayQuoted:
   struct `C:

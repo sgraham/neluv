@@ -88,10 +88,6 @@ class Type(AstNode):
   base: object
 
 @dataclass
-class ListType(Type):
-  pass
-
-@dataclass
 class SymTabEntry:  # Not AstNode
   type: Type
   ref_node: AstNode  # For error reporting

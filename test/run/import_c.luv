@@ -1,4 +1,3 @@
-import C
 from C import calloc
 from C import free as woof
 

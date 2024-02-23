@@ -34,10 +34,13 @@ def void printstr(str s): external
 def void printspace(): external
 def void printnl(): external
 
+import C
+
 // `C is container
 // `T is contained type
 // `I is iterator
 quote QuotedList:
+
   struct `C:
     *`T ptr
     int len
@@ -80,7 +83,7 @@ quote QuotedList:
   on `I def __next__(self):
     if self.cur >= self.seq.len:
       return false, 0
-    ret = self.seq.ptr[self.cur]
+    `T ret = self.seq.ptr[self.cur]
     self.cur += 1
     return true, ret
 

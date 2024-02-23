@@ -7,15 +7,15 @@ struct D:
 
 struct B:
   int b
-  C c
+  Z c
 
-struct C:
+struct Z:
   int c
   D d
 
 def main():
   d = D(1)
-  c = C(2, d)
+  c = Z(2, d)
   b = B(3, c)
   a = A(4, b)
   print(a.b.c.d.x)
