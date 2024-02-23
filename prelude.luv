@@ -34,6 +34,57 @@ def void printstr(str s): external
 def void printspace(): external
 def void printnl(): external
 
+// `C is container
+// `T is contained type
+// `I is iterator
+quote QuotedList:
+  struct `C:
+    *`T ptr
+    int len
+    int cap
+
+  struct `I:
+    *`C seq
+    int cur
+
+  on `C def __getitem__(self, int at):
+    assert at >= 0 and at < self.len
+    return self.ptr[at]
+
+  on `C def __iter__(self):
+    return `I(self, 0)
+
+  on `C def __del__(self):
+    C.free(self.ptr)
+    self.ptr = null
+    self.len = 0
+    self.cap = 0
+
+  on `C def reserve(self, int cap):
+    if self.cap < cap:
+      newcap = cap
+      if newcap < 16: newcap = 16
+      while newcap < cap:
+        newcap *= 2
+      *`T newp = C.malloc(sizeof(`T) * newcap)
+      C.memcpy(newp, self.ptr, sizeof(`T) * self.len)
+      C.free(self.ptr)
+      self.ptr = newp
+      self.cap = newcap
+
+  on `C def append(self, int value):
+    self.reserve(self.len + 1)
+    self.ptr[self.len] = value
+    self.len += 1
+
+  on `I def __next__(self):
+    if self.cur >= self.seq.len:
+      return false, 0
+    ret = self.seq.ptr[self.cur]
+    self.cur += 1
+    return true, ret
+
+
 import_macros "prelude.mac.py"
 
 // TODO: implement here with macros:
