@@ -475,8 +475,6 @@ class Compiler:
 
     self.generated_structs = {}
 
-    self.create_tuple_struct([_KEYWORDS['bool'], _KEYWORDS['i32']], None)  # For range().
-
     self.HACK_generate_list_int32_methods = False  # TODO XXX
 
     self.ast_root = ast_root
