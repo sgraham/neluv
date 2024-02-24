@@ -1,7 +1,6 @@
 import_macros "macro_make_list.mac.py"
 
 def main():
-  L = [0]  // TODO: hack to cause some List structs/methods to be generated
   for i in make_list():
     print(i)
 ---
