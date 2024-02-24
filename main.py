@@ -2112,8 +2112,8 @@ struct $Str $Str$__add__(struct $Str a, struct $Str b) {
 void $Str$__del__(struct $Str* self) {
   free(self->ptr);
 }
-uint64_t $Str$__hash__(struct $Str* self) {
-  return siphash24(self->ptr, self->len, csip_key);
+uint64_t $Str$__hash__(struct $Str self) {
+  return siphash24(self.ptr, self.len, csip_key);
 }
 #define $Str$__getitem__(a, b) (a[b])
 
