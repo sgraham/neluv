@@ -1,0 +1,15 @@
+def main():
+  x = not y
+  if not x:
+    pass
+---
+TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
+                                     name=Ident(name='main'),
+                                     params=[],
+                                     body=Block(entries=[Assign(lhs=Ident(name='x'),
+                                                                rhs=Not(expr=Ident(name='y'))),
+                                                         If(cond=Not(expr=Ident(name='x')),
+                                                            body=Block(entries=[Pass()]),
+                                                            elifs=[],
+                                                            els=None)]),
+                                     hidden=False)]))

@@ -179,6 +179,10 @@ class ToAst(Transformer):
   def or_test(self, children):
     return last.Or(children)
 
+  def not_test(self, children):
+    assert len(children) == 1
+    return last.Not(children[0])
+
   def factor(self, children):
     if len(children) == 2:
       return last.UnaryExpr(children[0], children[1])

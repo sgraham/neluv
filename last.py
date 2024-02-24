@@ -311,6 +311,10 @@ class Or(AstNode):
   tests: list[AstNode]
 
 @dataclass
+class Not(AstNode):
+  expr: AstNode
+
+@dataclass
 class CompExpr(AstNode):
   # 3 + 2n long:
   #   VAL0 cmp0 VAL1 [cmp1 VAL2 ...]
