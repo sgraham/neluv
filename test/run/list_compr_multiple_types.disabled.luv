@@ -6,8 +6,8 @@ def fib(int n):
 def main():
   L = [fib(i) for i in range(7)]
   L2 = [f"fib({i}): {x}" for i,x in enumerate(L)]
-  print(L[0])
-  print(L[6])
+  print(L2[0])
+  print(L2[6])
 ---
 fib(0): 0
 fib(6): 8
