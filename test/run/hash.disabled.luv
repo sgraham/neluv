@@ -1,0 +1,6 @@
+def main():
+  print(hash(44))
+  print(hash("hello"))
+---
+44
+18407243928213262281

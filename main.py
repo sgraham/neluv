@@ -406,19 +406,6 @@ class ToAst(Transformer):
   def error(self, children):
     return children[0]
 
-  '''
-  def preproc_stmt(self, children):
-    result = []
-    def indented_lines(ppl, indent):
-      for c in ppl:
-        if isinstance(c, Tree) and c.data == 'preproc_line':
-          indented_lines(c.children, indent + '  ')
-        else:
-          result.append(indent[2:] + c.value)
-    indented_lines(children, '')
-    return last.PreProc(result)
-  '''
-
   def expr_stmt(self, children): return children[0]
   def assign_stmt(self, children): return children[0]
 
@@ -1277,6 +1264,10 @@ class Compiler:
           assert len(expr.args) == 1
           return _KEYWORDS['int']   # TODO: 32/64
 
+        if expr.func.name == 'hash':
+          assert len(expr.args) == 1
+          return _KEYWORDS['u64']
+
         if expr.func.name == 'zeroed':
           assert len(expr.args) == 1
           return self.expr_type(funcdef, expr.args[0])
@@ -1576,6 +1567,13 @@ class Compiler:
           return '(%s){0}' % self.get_c_type(arg_type)
         else:
           self.error_at(node.func, 'incorrect number of arguments to "zeroed"')
+
+      if isinstance(node.func, last.Ident) and node.func.name == 'hash':
+        if len(node.args) == 1:
+          arg_type = self.expr_type(self.current_function, node.args[0])
+          return '%s$__hash__(%s)' % (self.get_mangled_c_type(arg_type), self.expr(node.args[0]))
+        else:
+          self.error_at(node.func, 'incorrect number of arguments to "iter"')
 
       if isinstance(node.func, last.Ident) and node.func.name == 'next':
         if len(node.args) == 1:
@@ -2030,6 +2028,69 @@ void free(void*);
 void* memcpy(void*, const void*, uint64_t);
 int printf(const char *, ...);
 
+/* <MIT License>
+ Copyright (c) 2013  Marek Majkowski <marek@popcount.org>
+ https://github.com/majek/csiphash/
+*/
+/* Modified to assume little-endian. */
+
+#define CSIP_ROTATE(x, b) (uint64_t)( ((x) << (b)) | ( (x) >> (64 - (b))) )
+
+#define CSIP_HALF_ROUND(a,b,c,d,s,t)      \
+  a += b; c += d;                         \
+  b = CSIP_ROTATE(b, s) ^ a;              \
+  d = CSIP_ROTATE(d, t) ^ c;              \
+  a = CSIP_ROTATE(a, 32);
+
+#define CSIP_DOUBLE_ROUND(v0,v1,v2,v3)    \
+  CSIP_HALF_ROUND(v0,v1,v2,v3,13,16);     \
+  CSIP_HALF_ROUND(v2,v1,v0,v3,17,21);     \
+  CSIP_HALF_ROUND(v0,v1,v2,v3,13,16);     \
+  CSIP_HALF_ROUND(v2,v1,v0,v3,17,21);
+
+
+static uint64_t siphash24(const void *src, unsigned long src_sz, const char key[16]) {
+  const uint64_t *_key = (uint64_t *)key;
+  uint64_t k0 = (uint64_t)(_key[0]);
+  uint64_t k1 = (uint64_t)(_key[1]);
+  uint64_t b = (uint64_t)src_sz << 56;
+  const uint64_t *in = (uint64_t*)src;
+
+  uint64_t v0 = k0 ^ 0x736f6d6570736575ULL;
+  uint64_t v1 = k1 ^ 0x646f72616e646f6dULL;
+  uint64_t v2 = k0 ^ 0x6c7967656e657261ULL;
+  uint64_t v3 = k1 ^ 0x7465646279746573ULL;
+
+  while (src_sz >= 8) {
+    uint64_t mi = (uint64_t)(*in);
+    in += 1; src_sz -= 8;
+    v3 ^= mi;
+    CSIP_DOUBLE_ROUND(v0,v1,v2,v3);
+    v0 ^= mi;
+  }
+
+  uint64_t t = 0; uint8_t *pt = (uint8_t *)&t; uint8_t *m = (uint8_t *)in;
+  switch (src_sz) {
+  case 7: pt[6] = m[6];
+  case 6: pt[5] = m[5];
+  case 5: pt[4] = m[4];
+  case 4: *((uint32_t*)&pt[0]) = *((uint32_t*)&m[0]); break;
+  case 3: pt[2] = m[2];
+  case 2: pt[1] = m[1];
+  case 1: pt[0] = m[0];
+  }
+  b |= (uint64_t)(t);
+
+  v3 ^= b;
+  CSIP_DOUBLE_ROUND(v0,v1,v2,v3);
+  v0 ^= b; v2 ^= 0xff;
+  CSIP_DOUBLE_ROUND(v0,v1,v2,v3);
+  CSIP_DOUBLE_ROUND(v0,v1,v2,v3);
+  return (v0 ^ v1) ^ (v2 ^ v3);
+}
+
+static const char csip_key[16] = "luv.2024-02-23.";
+
 struct $Str {
   char* ptr;
   int64_t len;
@@ -2051,6 +2112,9 @@ struct $Str $Str$__add__(struct $Str a, struct $Str b) {
 void $Str$__del__(struct $Str* self) {
   free(self->ptr);
 }
+uint64_t $Str$__hash__(struct $Str* self) {
+  return siphash24(self->ptr, self->len, csip_key);
+}
 #define $Str$__getitem__(a, b) (a[b])
 
 #define double$__lit__(a) (a)
@@ -2066,11 +2130,18 @@ void $Str$__del__(struct $Str* self) {
 #define int32_t$__isub__(a, b) ((*a)-=(b))
 #define int32_t$__imul__(a, b) ((*a)*=(b))
 #define int32_t$__idiv__(a, b) ((*a)/=(b))
+#define int32_t$__hash__(a) ((uint64_t)(a))
 
 #define int32_t$__getitem__(a, b) (a[b])
 
-static void printint(int x) {
+static void printi32(int32_t x) {
   printf("%d", x);
+}
+static void printi64(int64_t x) {
+  printf("%lld", x);
+}
+static void printu64(uint64_t x) {
+  printf("%llu", x);
 }
 static void printbool(_Bool x) {
   printf(x ? "true" : "false");

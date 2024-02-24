@@ -22,7 +22,11 @@ def print(macro):
     for i,a in __builtins__['enumerate'](macro.args):
         ty = macro.expr_type(a)
         if ty is macro.keywords['i32']:
-            result.append(last.FuncCall(last.Ident('printint'), [a]))
+            result.append(last.FuncCall(last.Ident('printi32'), [a]))
+        elif ty is macro.keywords['i64']:
+            result.append(last.FuncCall(last.Ident('printi64'), [a]))
+        elif ty is macro.keywords['u64']:
+            result.append(last.FuncCall(last.Ident('printu64'), [a]))
         elif ty is macro.keywords['bool']:
             result.append(last.FuncCall(last.Ident('printbool'), [a]))
         elif ty is macro.keywords['str']:

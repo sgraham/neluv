@@ -50,7 +50,7 @@ syn keyword     luvType str
 syn keyword     luvType void
 hi def link     luvType Type
 
-syn keyword     luvBuiltin range iter next stack heap enumerate print
+syn keyword     luvBuiltin range iter next stack heap enumerate print hash
 hi def link     luvBuiltin Function
 
 syn keyword     luvMacroHelper parse_expr parse_toplevel insert_global have_global args

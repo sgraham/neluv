@@ -28,7 +28,9 @@ on RangeIter def __next__(self):
 // - the compiler is messy wrt to treating $Str as a value/ptr and that makes
 // member funcs not right for str (this is probably just a general bug).
 
-def void printint(int i): external
+def void printi32(i32 i): external
+def void printi64(i64 i): external
+def void printu64(u64 i): external
 def void printbool(bool b): external
 def void printstr(str s): external
 def void printspace(): external
