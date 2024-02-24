@@ -1,0 +1,9 @@
+def main():
+  x = true
+  y = not x
+  if not y:
+    print("yay")
+  else:
+    print("boo")
+---
+yay

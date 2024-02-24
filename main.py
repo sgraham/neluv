@@ -1314,6 +1314,8 @@ class Compiler:
       if expr.chain[1].name in ('==', '!=', '<=', '<', '>', '>='):
         return _KEYWORDS['bool']
       assert False, "todo"
+    elif isinstance(expr, last.Not):
+      return _KEYWORDS['bool']
     elif isinstance(expr, last.UnaryExpr):
       rhs_type = self.expr_type(funcdef, expr.obj)
       if expr.op.name == '*':
@@ -1743,6 +1745,8 @@ class Compiler:
       return '&&'.join(self.expr(x) for x in node.tests)
     elif isinstance(node, last.Or):
       return '||'.join(self.expr(x) for x in node.tests)
+    elif isinstance(node, last.Not):
+      return '!(%s)' % self.expr(node.expr)
     else:
       raise RuntimeError("unhandled expr node %s" % node)
 
