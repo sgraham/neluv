@@ -36,6 +36,30 @@ def print(macro):
     result.append(last.FuncCall(last.Ident('printnl'), []))
     return last.Block(result)
 
+def enumerate(macro):
+    # XXX This needs some way to evaluate the return type of __iter__ of the
+    # type of macro.args[0], and probably the return type of __next__ of that
+    # type so that it can declare the correct struct types.
+    assert False, "todo"
+    assert len(macro.args) == 1
+    ty = macro.expr_type(macro.args[0])
+    e = 'Enumerator_' + macro.get_c_type(ty)
+    if not macro.have_global(e):
+        ast = macro.unquote(macro.quotes.QuotedEnumerate, {
+            '`E': last.Ident(e),
+            '`I': macro.keyword_or_ident(macro.get_c_type(ty))
+        })
+        import pprint
+        pprint.pprint('UNQUOTE RESULT')
+        pprint.pprint(ast)
+        for tl in ast.body.entries:
+            assert isinstance(tl.name, last.Ident), tl.name
+            macro.insert_global(tl.name.name, tl)
+    return last.FuncCall(
+            macro.parse_expr(e),
+            args=[last.FuncCall(last.Ident('iter'), [macro.args[0]]),
+                  last.Number(0)])
+
 def List(macro):
     assert len(macro.args) == 1
     assert isinstance(macro.args[0], last.Type)

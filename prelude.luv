@@ -88,6 +88,25 @@ quote QuotedList:
     return true, ret
 
 
+quote QuotedEnumerate:
+  struct `E:
+    `I it
+    int cur
+
+  on `E def __iter__(self):
+    return *self
+
+  on `E def __next__(self):
+    return false, (0, zeroed(str))
+//valid, val = next(self.it)
+//if valid:
+//  ret = self.cur, val
+//  self.cur += 1
+//  return true, ret
+//else:
+//  return false, (0, zeroed(val))
+
+
 import_macros "prelude.mac.py"
 
 // TODO: implement here with macros:

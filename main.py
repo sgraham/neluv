@@ -1165,11 +1165,13 @@ class Compiler:
         if ret is _KEYWORDS['auto']:
           assert False, 'internal error, unable to get type for "%s"' % node
         return ret
+      def get_c_type(s, ty):
+        return self.get_mangled_c_type(ty)
       def keyword_or_ident(s, name):
         x = _KEYWORDS.get(name, None)
         if x:
           return x
-        return last.Ident(children[0])
+        return last.Ident(name)
       def parse_expr(s, code):
         tree = self.parser.parse(code + '\n', include_prelude=False)
         ast = ToAst().transform(tree)
