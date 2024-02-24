@@ -205,6 +205,9 @@ class ToAst(Transformer):
   def optional_decl(self, children):
     return last.OptionalDecl(children[0])
 
+  def tuple_decl(self, children):
+    return last.TupleDecl(children)
+
   def type_for_var(self, children):
     return children[0]
 
@@ -559,6 +562,11 @@ class Compiler:
         if all(isinstance(x, last.Ident) for x in node.lhs.items):
           for x in node.lhs.items:
             self.local(x)
+
+    def visit_TupleDecl(self, tup):
+      field_types = [self.parent.expr_type(self.func, v) for v in tup.base]
+      self.parent.create_tuple_struct(field_types, tup)
+
 
   class ScanForNonlocal:
     def __init__(self, func, parent):
@@ -965,10 +973,13 @@ class Compiler:
 
     def resolve_ident(self, ident, rhs_type, tuple_index):
       if tuple_index is not None:
-        assert isinstance(rhs_type, last.Type), str(rhs_type)
-        assert isinstance(rhs_type.base, last.Struct), str(rhs_type.base)
-        rhs_type = rhs_type.base
-        rhs_type = rhs_type.members[tuple_index].type
+        if isinstance(rhs_type, last.Type) and isinstance(rhs_type.base, last.Struct):
+          rhs_type = rhs_type.base
+          rhs_type = rhs_type.members[tuple_index].type
+        elif isinstance(rhs_type, last.TupleDecl):
+          rhs_type = rhs_type.base[tuple_index]
+        else:
+          assert False, "todo; tuple style?"
       x = self.parent.current_function.find_in_symtab(ident.name)
       assert x, "ident not in scope? '%s'" % ident.name
       if x.type is _KEYWORDS['auto']:
@@ -1025,13 +1036,6 @@ class Compiler:
       opt_type = self.parent.expr_type(self.parent.current_function, ou.optexpr)
       assert isinstance(opt_type, last.OptionalDecl)
       self.resolve_ident(ou.bind, opt_type.base, tuple_index=None)
-
-    def visit_Tuple(self, tc):
-      #print('VISIT_TUPLE0', tc)
-      #field_types = [self.parent.expr_type(self.parent.current_function, v) for v in tc.items]
-      #print('VISIT_TUPLE1', field_types)
-      #self.parent.create_tuple_struct(field_types, tc)
-      pass
 
     def visit_ListComprehension(self, lc):
       elem_type = self.parent.expr_type(self.parent.current_function, lc.body.result)
@@ -1369,6 +1373,8 @@ class Compiler:
         return obj
     elif isinstance(expr, last.Tuple):
       return self.tuple_struct_for_values(funcdef, expr.items).cached_type()
+    elif isinstance(expr, last.TupleDecl):
+      assert False, str(expr)
     elif isinstance(expr, last.Type):
       return expr  # This is needed for sizeof(), not sure if it's a good idea here.
     assert False, "unhandled expr_type %s" % expr
@@ -1452,6 +1458,9 @@ class Compiler:
     if isinstance(node, last.ListDecl):
       struct = self.generated_structs[self.get_mangled_c_type(node.base)].struct
       assert isinstance(struct.name, last.Ident)
+      return 'struct ' + struct.name.name
+    if isinstance(node, last.TupleDecl):
+      struct = self.tuple_struct_for_types(node.base)
       return 'struct ' + struct.name.name
     if isinstance(node, last.Type):
       # TODO: This should probably only be for a special BaseType, because for
@@ -1818,8 +1827,12 @@ class Compiler:
       if isinstance(node.lhs, last.Tuple):
         assert all(isinstance(x, last.Ident) for x in node.lhs.items)
         rhs_type = self.expr_type(self.current_function, node.rhs)
-        assert isinstance(rhs_type, last.Type) and isinstance(rhs_type.base, last.Struct)
-        field_types = [x.type for x in rhs_type.base.members]
+        if isinstance(rhs_type, last.Type) and isinstance(rhs_type.base, last.Struct):
+          field_types = [x.type for x in rhs_type.base.members]
+        elif isinstance(rhs_type, last.TupleDecl):
+          field_types = [x for x in rhs_type.base]
+        else:
+          assert False, "todo; tuple style?"
         struct = self.tuple_struct_for_types(field_types)
         tmp = get_tmp_var()
         assert isinstance(struct.name, last.Ident)
@@ -2184,7 +2197,7 @@ def do_tests(parser, test_list, update):
     if '.disabled.' in t:
       disabled_list.append(t)
       continue
-    #print(t)
+    print(t)
     t = t.replace('\\', '/')
     source, expected = test_contents(t)
     is_parse = t.startswith('test/parse')

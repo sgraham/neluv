@@ -1,0 +1,21 @@
+def main():
+  (int, int) two_ints
+  (str, int, bool) sib
+  (int,) one_elem
+---
+TopLevel(body=Block(entries=[FuncDef(rtype=Type(base='auto'),
+                                     name=Ident(name='main'),
+                                     params=[],
+                                     body=Block(entries=[VarDecl(type=TupleDecl(base=[Type(base='i32'),
+                                                                                      Type(base='i32')]),
+                                                                 name='two_ints',
+                                                                 init=None),
+                                                         VarDecl(type=TupleDecl(base=[Type(base='str'),
+                                                                                      Type(base='i32'),
+                                                                                      Type(base='bool')]),
+                                                                 name='sib',
+                                                                 init=None),
+                                                         VarDecl(type=TupleDecl(base=[Type(base='i32')]),
+                                                                 name='one_elem',
+                                                                 init=None)]),
+                                     hidden=False)]))

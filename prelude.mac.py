@@ -27,6 +27,8 @@ def print(macro):
             result.append(last.FuncCall(last.Ident('printbool'), [a]))
         elif ty is macro.keywords['str']:
             result.append(last.FuncCall(last.Ident('printstr'), [a]))
+        elif isinstance(ty, last.TupleDecl):
+            result.append(last.FuncCall(last.Ident('printstr'), [last.String("<todo: tuple>")]))
         else:
             assert False, 'todo %s' % ty
         if i < len(macro.args) - 1:

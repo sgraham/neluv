@@ -1,0 +1,41 @@
+struct MyDict_str_int:
+  *(str, int) data
+  int cap
+
+struct MyDictIter_str_int:
+  *MyDict_str_int dict
+  int cur
+
+on MyDict_str_int def __getitem__(self, str key):
+  assert false
+
+on MyDict_str_int def __setitem__(self, str key, int val):
+  self.data = C.malloc(sizeof((str, int)) * 16)
+  self.cap = 16
+  self
+  assert false
+
+on MyDict_str_int def __delitem__(self, str key):
+  assert false
+
+on MyDict_str_int def items(self):
+  assert false
+
+on MyDict_str_int def values(self):
+  assert false
+
+// TODO: default for ret not possible currently, maybe zeroed(int) is ok
+on MyDict_str_int def get(self, str key):
+  assert false
+
+on MyDict_str_int def __iter__(self):
+  return MyDictIter_str_int(self, 0)
+
+on MyDict_str_int def __del__(self):
+  C.free(self.data)
+  self.data = null
+  self.cap = 0
+
+def main():
+  D = MyDict_str_int(null, 0)
+  del D

@@ -1,4 +1,4 @@
 def def (int) Func(float x):
   return null
 ---
-ParseError(line=1, column=9, got=Token('LPAR', '('))
+ParseError(line=1, column=13, got=Token('RPAR', ')'))

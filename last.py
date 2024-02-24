@@ -208,6 +208,11 @@ class OptionalDecl(Type):
   pass
 
 @dataclass
+class TupleDecl(Type):
+  # base is list[Type]
+  pass
+
+@dataclass
 class MacroCallWithBlock(AstNode):
   func: FuncCall
   body: Block

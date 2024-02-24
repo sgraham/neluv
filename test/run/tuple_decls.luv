@@ -1,0 +1,10 @@
+def main():
+  (str, int, bool) a = ("hi", 44, false)
+  x, y, z = a
+  print(x)
+  print(y)
+  print(z)
+---
+hi
+44
+false

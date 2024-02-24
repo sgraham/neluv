@@ -32,6 +32,8 @@ assign_stmt: augassign | assign
                | "[" number "]" var_decl_type -> fixed_array_decl
                | "*" var_decl_type -> pointer_decl
                | "?" var_decl_type -> optional_decl
+               | "(" var_decl_type ("," var_decl_type)+ ")" -> tuple_decl
+               | "(" var_decl_type "," ")" -> tuple_decl
                | funcdecl
 
 ?name_with_package: name_with_package "::" name
@@ -54,8 +56,8 @@ assign: testlist_expr ("=" testlist_expr)+
 augassign: testlist_expr augassign_op testlist
 !augassign_op: "+=" | "-=" | "*=" | "@=" | "/=" | "%=" | "&=" | "|=" | "^=" | "<<=" | ">>=" | "**=" | "//="
 ?testlist_expr: test
-                   | test ("," test)+ ","?  -> tuple
-                   | test ","  -> tuple
+              | test ("," test)+ ","?  -> tuple
+              | test ","  -> tuple
 
 del_stmt: "del" exprlist
 pass_stmt: "pass"
