@@ -555,8 +555,10 @@ class Compiler:
             self.local(x)
 
     def visit_TupleDecl(self, tup):
-      field_types = [self.parent.expr_type(self.func, v) for v in tup.base]
-      self.parent.create_tuple_struct(field_types, tup)
+      #print('TUPLE_DECL', tup)
+      #field_types = [self.parent.expr_type(self.func, v) for v in tup.base]
+      #self.parent.create_tuple_struct(field_types, tup)
+      pass
 
 
   class ScanForNonlocal:
@@ -1104,6 +1106,10 @@ class Compiler:
       assert self.parent.current_function == func
       self.parent.current_function = None
 
+    def visit_TupleDecl(self, tup):
+      #print('TUPLE_DECL RESOLVE', tup)
+      field_types = [self.parent.expr_type(self.parent.current_function, v) for v in tup.base]
+      self.parent.create_tuple_struct(field_types, tup)
 
   def resolve_idents(self, start_at=None):
     if start_at:
@@ -1263,6 +1269,10 @@ class Compiler:
         if expr.func.name == 'sizeof':
           assert len(expr.args) == 1
           return _KEYWORDS['int']   # TODO: 32/64
+
+        if expr.func.name == 'unreachable':
+          assert len(expr.args) == 0
+          return _KEYWORDS['void']
 
         if expr.func.name == 'hash':
           assert len(expr.args) == 1
@@ -1567,6 +1577,12 @@ class Compiler:
           return '(%s){0}' % self.get_c_type(arg_type)
         else:
           self.error_at(node.func, 'incorrect number of arguments to "zeroed"')
+
+      if isinstance(node.func, last.Ident) and node.func.name == 'unreachable':
+        if len(node.args) == 0:
+          return '({__builtin_unreachable(); assert(0);})'
+        else:
+          self.error_at(node.func, 'incorrect number of arguments to "unreachable"')
 
       if isinstance(node.func, last.Ident) and node.func.name == 'hash':
         if len(node.args) == 1:

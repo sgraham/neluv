@@ -1,22 +1,79 @@
-struct MyDict_str_int:
-  *(str, int) data
-  int cap
+// TODO:
+// - type cast punning -1 for TOMBSTONE
+// - are ptr and len of str actually accessible in user code? should they be?
+// - write rehash()
+// - iterator types
 
-struct MyDictIter_str_int:
-  *MyDict_str_int dict
-  int cur
+LOW_WATERMARK = 50
+HIGH_WATERMARK = 70
+INITIAL_SIZE = 16
+TOMBSTONE = -1
+
+struct MyDictEntry_str_int:
+  str key
+  int val
+
+struct MyDict_str_int:
+  *MyDictEntry_str_int buckets
+  int capacity
+  int used
+
+def match(*MyDictEntry_str_int entry, str key):
+  return (entry.key.ptr and
+          entry.key.ptr != TOMBSTONE and
+          entry.key.len == key.len and
+          C.memcmp(entry.key.ptr, key.ptr, key.len) == 0)
+
+on MyDict_str_int def _get_or_insert_entry(self, str key):
+  if not self.buckets:
+    self.buckets = C.malloc(sizeof((str, int) * INITIAL_SIZE))
+    self.capacity = INITIAL_SIZE
+  elif self.used * 100 / self.capacity >= HIGH_WATERMARK:
+    self.rehash()
+
+  h = hash(key)
+
+  for i in range(self.capacity):
+    entry = &self.buckets[(h + i) % self.capacity]
+    if match(entry, key):
+      entry.key = key
+
+    if not entry.key:
+      entry.key = key
+      self.used += 1
+      return entry
+
+  unreachable()
+
+on MyDict_str_int def _get_entry(self, str key):
+  if not self.buckets:
+    return null
+
+  h = hash(key)
+
+  for i in range(capacity):
+    entry = self.buckets[(h+i) % self.capacity]
+    if match(entry, key):
+      return entry
+    if entry.key == null:
+      return null
+
+  unreachable()
 
 on MyDict_str_int def __getitem__(self, str key):
-  assert false
+  entry = self._get_entry(key)
+  if entry:
+    return entry.val
+  return zeroed(int)
 
 on MyDict_str_int def __setitem__(self, str key, int val):
-  self.data = C.malloc(sizeof((str, int)) * 16)
-  self.cap = 16
-  self
-  assert false
+  entry = self._get_or_insert_entry(key)
+  entry.val = val
 
 on MyDict_str_int def __delitem__(self, str key):
-  assert false
+  entry = self._get_entry(key)
+  if entry:
+    entry.key = TOMBSTONE
 
 on MyDict_str_int def items(self):
   assert false
@@ -27,9 +84,6 @@ on MyDict_str_int def values(self):
 // TODO: default for ret not possible currently, maybe zeroed(int) is ok
 on MyDict_str_int def get(self, str key):
   assert false
-
-on MyDict_str_int def __iter__(self):
-  return MyDictIter_str_int(self, 0)
 
 on MyDict_str_int def __del__(self):
   C.free(self.data)
