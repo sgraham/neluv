@@ -1,0 +1,33 @@
+- coherent resolution order w/ caching, currently a huge adhoc mess, esp. for
+  macros
+- make current main.py into "luv0" and start a self-hosted version
+- dict:
+  - manual version
+  - macro version
+  - syntax extensions for literals
+  - .items() iter
+  - .values() iter
+- Str$__getitem__ is for Str* which makes no sense. possibly resolved now?
+- enumerate() as macro
+- visit_Tuple is screwed up (related to resolution order)
+  - assign wants to have RHS eval'd to get types for tuple
+  - tuple visit also wants to ask for the types of all the elements and to make a struct defn
+- parsing type ptr T vs. unaryop *T:
+  - affects sizeof, etc.
+  - worked around for cast
+  - but either the parser has to get "dumber" (less contextual), or moreso like cast.
+  - can be a bit confusing because sometimes parsing an ident as a type is fine
+    either way until later, so it's only when it has sigil prefixes that it gets confused.
+    the basic types being keywords also "saves" it sometimes.
+- expr() and expr_type() (realllly) need lval vs rval context. maybe lval() that
+  goes to expr() vs addr() or something.
+- making pointers indexable (so raw *Entry of dict could be indexed) made
+  indexing elements of a list when accessed via a pointer ugly. it seems closer to C but maybe
+  it's worse, and we should have an explicit deref(ptr, offset) when using raw memory.
+- similarily, dict should probably be using some sort of a array type, not
+  malloc'ing things directly so it could optionally be range checked, and then might not need to
+  index pointers like arrays anyway
+- prelude being force-included screws up line numbers in error messages
+  - could hack something to subtract off the length of the prelude, but would be
+    nicer to be able to parse them separately with file/line correct and then merge the parse
+    trees instead.
