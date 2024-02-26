@@ -1,13 +1,11 @@
 // TODO:
-// - type cast punning -1 for TOMBSTONE
-// - are ptr and len of str actually accessible in user code? should they be?
 // - write rehash()
 // - iterator types
 
 LOW_WATERMARK = 50
 HIGH_WATERMARK = 70
 INITIAL_SIZE = 16
-TOMBSTONE = -1
+TOMBSTONE = reinterpret -1 as *i8
 
 struct MyDictEntry_str_int:
   str key
@@ -24,9 +22,32 @@ def match(*MyDictEntry_str_int entry, str key):
           entry.key.len == key.len and
           C.memcmp(entry.key.ptr, key.ptr, key.len) == 0)
 
+on MyDict_str_int def rehash(self):
+  nkeys = 0
+  for i in range(self.capacity):
+    if self.buckets[i].key.ptr != null and self.buckets[i].key.ptr != TOMBSTONE:
+      nkeys += 1
+
+  cap = self.capacity
+  while (nkeys * 100) / cap >= LOW_WATERMARK:
+    cap *= 2
+  assert cap > 0
+
+
+  map2 = MyDict_str_int(C.malloc(sizeof(MyDictEntry_str_int) * cap), cap, 0)
+  for i in range(self.capacity):
+    entry = &self.buckets[i]
+    if entry.key.ptr != null and entry.key.ptr != TOMBSTONE:
+      map2[entry.key] = entry.val
+
+  assert map2.used == nkeys
+  C.free(self.buckets)
+  *self = map2
+
+
 on MyDict_str_int def _get_or_insert_entry(self, str key):
   if not self.buckets:
-    self.buckets = C.malloc(sizeof((str, int) * INITIAL_SIZE))
+    self.buckets = C.malloc(sizeof(MyDictEntry_str_int) * INITIAL_SIZE)
     self.capacity = INITIAL_SIZE
   elif self.used * 100 / self.capacity >= HIGH_WATERMARK:
     self.rehash()
@@ -34,11 +55,13 @@ on MyDict_str_int def _get_or_insert_entry(self, str key):
   h = hash(key)
 
   for i in range(self.capacity):
-    entry = &self.buckets[(h + i) % self.capacity]
+    i64 hash_loc = (reinterpret h as i64) + (reinterpret i as i64)  // XXX silly
+    i64 modded = hash_loc % (reinterpret self.capacity as i64)
+    entry = &self.buckets[modded]
     if match(entry, key):
       entry.key = key
 
-    if not entry.key:
+    if not entry.key.ptr:
       entry.key = key
       self.used += 1
       return entry
@@ -46,23 +69,26 @@ on MyDict_str_int def _get_or_insert_entry(self, str key):
   unreachable()
 
 on MyDict_str_int def _get_entry(self, str key):
+  NONE = zeroed(MyDictEntry_str_int)  // XXX inference problem on rval
   if not self.buckets:
-    return null
+    return false, NONE
 
   h = hash(key)
 
-  for i in range(capacity):
-    entry = self.buckets[(h+i) % self.capacity]
+  for i in range(self.capacity):
+    i64 hash_loc = (reinterpret h as i64) + (reinterpret i as i64)  // XXX silly
+    i64 modded = hash_loc % (reinterpret self.capacity as i64)
+    entry = &self.buckets[modded]
     if match(entry, key):
-      return entry
-    if entry.key == null:
-      return null
+      return true, entry
+    if entry.key.ptr == null:
+      return false, NONE
 
   unreachable()
 
 on MyDict_str_int def __getitem__(self, str key):
-  entry = self._get_entry(key)
-  if entry:
+  valid, entry = self._get_entry(key)
+  if valid:
     return entry.val
   return zeroed(int)
 
@@ -71,9 +97,9 @@ on MyDict_str_int def __setitem__(self, str key, int val):
   entry.val = val
 
 on MyDict_str_int def __delitem__(self, str key):
-  entry = self._get_entry(key)
-  if entry:
-    entry.key = TOMBSTONE
+  valid, entry = self._get_entry(key)
+  if valid:
+    entry.key.ptr = TOMBSTONE
 
 on MyDict_str_int def items(self):
   assert false
@@ -81,14 +107,16 @@ on MyDict_str_int def items(self):
 on MyDict_str_int def values(self):
   assert false
 
-// TODO: default for ret not possible currently, maybe zeroed(int) is ok
+// TODO: default for ret not possible currently, maybe zeroed(V)==int for now
+// or just get() and get_with_default() or something.
 on MyDict_str_int def get(self, str key):
   assert false
 
 on MyDict_str_int def __del__(self):
   C.free(self.data)
-  self.data = null
-  self.cap = 0
+  self.buckets = null
+  self.capacity = 0
+  self.used = 0
 
 def main():
   D = MyDict_str_int(null, 0)

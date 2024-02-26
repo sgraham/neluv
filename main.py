@@ -55,11 +55,13 @@ OP_MAP = {
     '-': '__sub__',
     '*': '__mul__',
     '/': '__div__',
+    '%': '__mod__',
 
     '+=': '__iadd__',
     '-=': '__isub__',
     '*=': '__imul__',
     '/=': '__idiv__',
+    '%=': '__imod__',
 
     # TODO: more
 }
@@ -1341,6 +1343,8 @@ class Compiler:
       assert False, "unhandled Ident expr_type %s" % expr
     elif isinstance(expr, last.Expr):
       t0 = self.expr_type(funcdef, expr.chain[0])
+      print('EXPRt0', t0)
+      print('EXPRt2', self.expr_type(funcdef, expr.chain[2]))
       if t0 is None: return None  # HACK for recursive expr_type, see also in FuncCall.
       for i in range(1, len(expr.chain), 2):
         if (expr.chain[i].name not in ('+', '*', '-', '/') or
@@ -1383,17 +1387,22 @@ class Compiler:
         else:
           self.error_at(expr, '"%s" not found on "%s"' % (expr.rhs, cur.name))
           return None
+    elif isinstance(expr, last.And) or isinstance(expr, last.Or) or isinstance(expr, last.Not):
+      return _KEYWORDS['bool']
     elif isinstance(expr, last.GetItem):
       obj = self.expr_type(funcdef, expr.obj)
       # XXX Type vs Struct
-      while isinstance(obj, last.PointerDecl):
-        obj = obj.base
-      if isinstance(obj, last.ListDecl):
+      if isinstance(obj, last.PointerDecl):
         return obj.base
-      elif isinstance(obj, last.Struct):
-        return self.result_type_of_method(obj, '__getitem__', obj)
       else:
-        return obj
+        if isinstance(obj, last.ListDecl):
+          return obj.base
+        elif isinstance(obj, last.Struct):
+          return self.result_type_of_method(obj, '__getitem__', errnode=expr)
+        elif isinstance(obj, last.Type) and isinstance(obj.base, last.Struct):
+          return self.result_type_of_method(obj.base, '__getitem__', errnode=expr)
+        else:
+          assert False, "todo; GetItem: " + str(obj)
     elif isinstance(expr, last.Tuple):
       return self.tuple_struct_for_values(funcdef, expr.items).cached_type()
     elif isinstance(expr, last.TupleDecl):
@@ -1560,16 +1569,18 @@ class Compiler:
       return '(%s(%s)).%s' % (self.sigils_for_indir(node, indirs), self.expr(node.lhs), node.rhs)
     elif isinstance(node, last.GetItem):
       ty = self.expr_type(self.current_function, node.obj)
-      indir_count = 1
-      while isinstance(ty, last.PointerDecl):
-        ty = ty.base
-        indir_count -= 1
-      c_type = self.get_mangled_c_type(ty)
-      return '%s$__getitem__(%s%s, %s)' % (
-          c_type,
-          self.sigils_for_indir(node, indir_count),
-          self.expr(node.obj),
-          self.expr(node.index))
+      # If x is a pointer, assume x[n] means like C, not __getitem__(x[0], n) as
+      # it could also in theory mean (or some other level of indirection into
+      # ***p).
+      if isinstance(ty, last.PointerDecl):
+        return '%s[%s]' % (self.expr(node.obj), self.expr(node.index))
+      else:
+        c_type = self.get_mangled_c_type(ty)
+        return '%s$__getitem__(%s%s, %s)' % (
+            c_type,
+            self.sigils_for_indir(node, 0),
+            self.expr(node.obj),
+            self.expr(node.index))
     elif isinstance(node, last.FuncCall):
       if isinstance(node.func, last.Ident) and node.func.name == 'iter':
         if len(node.args) == 1:
@@ -1603,7 +1614,7 @@ class Compiler:
           arg_type = self.expr_type(self.current_function, node.args[0])
           return '%s$__hash__(%s)' % (self.get_mangled_c_type(arg_type), self.expr(node.args[0]))
         else:
-          self.error_at(node.func, 'incorrect number of arguments to "iter"')
+          self.error_at(node.func, 'incorrect number of arguments to "hash"')
 
       if isinstance(node.func, last.Ident) and node.func.name == 'next':
         if len(node.args) == 1:
@@ -1627,7 +1638,8 @@ class Compiler:
             ident.special = True
             result = self.expr(ident)
           else:
-            self.error_at('%s not found in %s' % (node.func.rhs, package.name))
+            self.error_at(node, '%s not found in %s' % (node.func.rhs, package.name))
+            return ''
         else:
           # Pseudo member function.
           # LHS might be a ****Struct, or *Struct, or Struct, so first find the
@@ -1647,7 +1659,7 @@ class Compiler:
                 lhs_type = last.Type(lhs_type)
               lhs = last.UnaryExpr(last.Op('*'), lhs)
           else:
-            self.error_at('%s not callable on %s' % (node.func.rhs, node.func.lhs))
+            self.error_at(node, '%s not callable on %s' % (node.func.rhs, node.func.lhs))
             return ''
 
           result_type = self.result_type_of_method(lhs_type, node.func.rhs, errnode=node.func)
@@ -2158,13 +2170,27 @@ uint64_t $Str$__hash__(struct $Str self) {
 #define int32_t$__sub__(a, b) ((a)-(b))
 #define int32_t$__mul__(a, b) ((a)*(b))
 #define int32_t$__div__(a, b) ((a)/(b))
+#define int32_t$__mod__(a, b) ((a)%(b))
 #define int32_t$__iadd__(a, b) ((*a)+=(b))
 #define int32_t$__isub__(a, b) ((*a)-=(b))
 #define int32_t$__imul__(a, b) ((*a)*=(b))
 #define int32_t$__idiv__(a, b) ((*a)/=(b))
+#define int32_t$__imod__(a, b) ((*a)%=(b))
 #define int32_t$__hash__(a) ((uint64_t)(a))
 
-#define int32_t$__getitem__(a, b) (a[b])
+#define int64_t$__lit__(a) (a)
+#define int64_t$__del__(a)
+#define int64_t$__add__(a, b) ((a)+(b))
+#define int64_t$__sub__(a, b) ((a)-(b))
+#define int64_t$__mul__(a, b) ((a)*(b))
+#define int64_t$__div__(a, b) ((a)/(b))
+#define int64_t$__mod__(a, b) ((a)%(b))
+#define int64_t$__iadd__(a, b) ((*a)+=(b))
+#define int64_t$__isub__(a, b) ((*a)-=(b))
+#define int64_t$__imul__(a, b) ((*a)*=(b))
+#define int64_t$__idiv__(a, b) ((*a)/=(b))
+#define int64_t$__imod__(a, b) ((*a)%=(b))
+#define int64_t$__hash__(a) ((uint64_t)(a))
 
 static void printi32(int32_t x) {
   printf("%d", x);

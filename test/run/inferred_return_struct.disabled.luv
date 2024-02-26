@@ -1,0 +1,14 @@
+struct Something:
+  str k
+  int v
+
+def func():
+  if false:
+    return false, zeroed(Something)
+
+  blah = Something("hi", 343)
+  return true, blah
+
+def main():
+  s = func()
+  print(s.k, s.v)
