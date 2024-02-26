@@ -323,6 +323,11 @@ class CompExpr(AstNode):
   chain: list[AstNode]
 
 @dataclass
+class Cast(AstNode):
+  expr: AstNode
+  type: Type
+
+@dataclass
 class PackageReference(AstNode):
   lhs: AstNode
   rhs: AstNode

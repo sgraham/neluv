@@ -1,0 +1,10 @@
+def main():
+  x = "hi!"
+  print(x.len, x.ptr)
+  BAD_PTR = reinterpret -1 as *i8
+  x.ptr = reinterpret -1 as *i8
+  x.len = 0
+  print(x.ptr == BAD_PTR, x.len)
+---
+3 hi!
+true 0

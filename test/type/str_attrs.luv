@@ -1,0 +1,8 @@
+def main():
+  x = "something"
+  assert x.ptr != null
+  assert x.len == 9
+  x.zippy = 3
+---
+!
+test/type/str_attrs.luv:5:3:"zippy" not found on "str"

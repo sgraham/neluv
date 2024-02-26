@@ -33,6 +33,7 @@ def void printi64(i64 i): external
 def void printu64(u64 i): external
 def void printbool(bool b): external
 def void printstr(str s): external
+def void printrawstr(*i8 s): external
 def void printspace(): external
 def void printnl(): external
 

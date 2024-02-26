@@ -165,6 +165,9 @@ class ToAst(Transformer):
   def getattr(self, children):
     return last.GetAttr(children[0], children[1])
 
+  def cast(self, children):
+    return last.Cast(children[0], children[1])
+
   def arith_expr(self, children):
     assert (len(children) - 3) % 2 == 0
     return last.Expr(children)
@@ -1345,6 +1348,8 @@ class Compiler:
           break
       else:
         return t0
+    elif isinstance(expr, last.Cast):
+      return expr.type
     elif isinstance(expr, last.ListDecl):
       assert False, str(expr)
     elif isinstance(expr, last.ListComprehension):
@@ -1363,12 +1368,21 @@ class Compiler:
         cur = lhs
       while isinstance(cur, last.PointerDecl):
         cur = cur.base
-      assert isinstance(cur, last.Struct), str(cur)
-      for x in cur.members:
-        if x.name == expr.rhs:
-          return x.type
+      if isinstance(cur, str):
+        if expr.rhs == 'ptr':
+          return last.PointerDecl(_KEYWORDS['i8'])
+        elif expr.rhs == 'len':
+          return _KEYWORDS['i64']
+        self.error_at(expr, '"%s" not found on "%s"' % (expr.rhs, cur))
+        return None
       else:
-        self.error_at(expr, '"%s" not found on "%s"' % (expr.rhs, cur.name))
+        assert isinstance(cur, last.Struct), str(cur)
+        for x in cur.members:
+          if x.name == expr.rhs:
+            return x.type
+        else:
+          self.error_at(expr, '"%s" not found on "%s"' % (expr.rhs, cur.name))
+          return None
     elif isinstance(expr, last.GetItem):
       obj = self.expr_type(funcdef, expr.obj)
       # XXX Type vs Struct
@@ -1761,6 +1775,8 @@ class Compiler:
       return '||'.join(self.expr(x) for x in node.tests)
     elif isinstance(node, last.Not):
       return '!(%s)' % self.expr(node.expr)
+    elif isinstance(node, last.Cast):
+      return '((%s)(%s))' % (self.get_c_type(node.type), self.expr(node.expr))
     else:
       raise RuntimeError("unhandled expr node %s" % node)
 
@@ -2108,11 +2124,11 @@ static uint64_t siphash24(const void *src, unsigned long src_sz, const char key[
 static const char csip_key[16] = "luv.2024-02-23.";
 
 struct $Str {
-  char* ptr;
+  int8_t* ptr;
   int64_t len;
 };
 
-#define $Str$__lit__(s) (struct $Str){s, sizeof(s) - 1}
+#define $Str$__lit__(s) (struct $Str){(int8_t*)s, sizeof(s) - 1}
 
 struct $Str $Str$from_n(char* data, size_t len) {
   struct $Str s = {malloc(len + 1), len};
@@ -2123,7 +2139,7 @@ struct $Str $Str$__add__(struct $Str a, struct $Str b) {
   char* p = malloc(a.len + b.len + 1);
   memcpy(p, a.ptr, a.len);
   memcpy(p + a.len, b.ptr, b.len + 1);
-  return (struct $Str){p, a.len + b.len};
+  return (struct $Str){(int8_t*)p, a.len + b.len};
 }
 void $Str$__del__(struct $Str* self) {
   free(self->ptr);
@@ -2164,6 +2180,9 @@ static void printbool(_Bool x) {
 }
 static void printstr(struct $Str s) {
   printf("%s", s.ptr);
+}
+static void printrawstr(int8_t* s) {
+  printf("%s", s);
 }
 static void printspace(void) {
   printf(" ");

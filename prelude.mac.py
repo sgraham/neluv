@@ -31,6 +31,8 @@ def print(macro):
             result.append(last.FuncCall(last.Ident('printbool'), [a]))
         elif ty is macro.keywords['str']:
             result.append(last.FuncCall(last.Ident('printstr'), [a]))
+        elif isinstance(ty, last.PointerDecl) and ty.base is macro.keywords['i8']:
+            result.append(last.FuncCall(last.Ident('printrawstr'), [a]))
         elif isinstance(ty, last.TupleDecl):
             result.append(last.FuncCall(last.Ident('printstr'), [last.String("<todo: tuple>")]))
         else:
@@ -66,6 +68,7 @@ def enumerate(macro):
 
 def List(macro):
     assert len(macro.args) == 1
+    #__builtins__['print']('args', macro.args)
     assert isinstance(macro.args[0], last.Type)
     name = macro.args[0].base
     #__builtins__['print']('NAME', name)

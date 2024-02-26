@@ -32,6 +32,7 @@ syn keyword     luvKeyword       on
 syn keyword     luvKeyword       or
 syn keyword     luvKeyword       pass
 syn keyword     luvKeyword       quote
+syn keyword     luvKeyword       reinterpret
 syn keyword     luvKeyword       return
 syn keyword     luvKeyword       sizeof
 syn keyword     luvKeyword       struct
