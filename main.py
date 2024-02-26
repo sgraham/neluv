@@ -1343,8 +1343,6 @@ class Compiler:
       assert False, "unhandled Ident expr_type %s" % expr
     elif isinstance(expr, last.Expr):
       t0 = self.expr_type(funcdef, expr.chain[0])
-      print('EXPRt0', t0)
-      print('EXPRt2', self.expr_type(funcdef, expr.chain[2]))
       if t0 is None: return None  # HACK for recursive expr_type, see also in FuncCall.
       for i in range(1, len(expr.chain), 2):
         if (expr.chain[i].name not in ('+', '*', '-', '/') or
@@ -1578,7 +1576,7 @@ class Compiler:
         c_type = self.get_mangled_c_type(ty)
         return '%s$__getitem__(%s%s, %s)' % (
             c_type,
-            self.sigils_for_indir(node, 0),
+            self.sigils_for_indir(node, 1),
             self.expr(node.obj),
             self.expr(node.index))
     elif isinstance(node, last.FuncCall):

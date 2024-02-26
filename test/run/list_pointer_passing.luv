@@ -8,19 +8,19 @@ def main():
   L = [4,2,9,11]
   R = funcy(&L)
   print(L.len == R.len)
-  print(L[0] == R[0])
-  print(L[1] == R[1])
-  print(L[2] == R[2])
-  print(L[3] == R[3])
+  print(L[0] == (*R)[0])
+  print(L[1] == (*R)[1])
+  print(L[2] == (*R)[2])
+  print(L[3] == (*R)[3])
 
   D = funcy2(&R)
   print(L.len == D.len)
   print(L[0])
   print(L[3])
-  print(D[0])
-  print(D[3])
-  print(L[1] == D[1])
-  print(L[2] == D[2])
+  print((* *D)[0])
+  print((* *D)[3])
+  print(L[1] == (* *D)[1])
+  print(L[2] == (* *D)[2])
 ---
 true
 true

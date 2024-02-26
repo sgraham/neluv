@@ -5,7 +5,7 @@ struct MyEnum:
 def walk_next(*MyEnum myenum):
   if myenum.cur >= myenum.seq.len:
     return false, (0, 0)
-  ret = (myenum.cur, myenum.seq[myenum.cur])
+  ret = (myenum.cur, (*myenum.seq)[myenum.cur])
   myenum.cur = myenum.cur + 1
   return true, ret
 
